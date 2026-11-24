@@ -58,10 +58,4 @@ export async function link(raw: string, onStatus?: (s: string) => void): Promise
   return readPage(url, onStatus);
 }
 
-export async function photo(file: File, onStatus?: (s: string) => void): Promise<Reply> {
-  if (!hasKey()) return { text: 'Reading photos needs a Claude key (Settings → Preferences).', needsKey: true };
-  const { readPhoto } = await import('./claude');
-  return readPhoto(file, onStatus);
-}
-
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

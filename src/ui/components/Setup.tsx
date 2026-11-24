@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Camera, Link2, Mic, X } from 'lucide-react';
+import { Camera, ImagePlus, Link2, Mic, X } from 'lucide-react';
 import type { Place, PlaceKind, Occupation } from '@engine/types';
 import { uid } from '@engine/time';
 import { store } from '../../data/store';
-import { openTalk, go } from '../nav';
+import { openTalk, go, pickPhotos, openPhotoImport } from '../nav';
 import { Btn, Chip, inputCls } from '../ui';
 import { AGES, OCCUPATIONS } from '../views/Profile';
 
@@ -42,10 +42,11 @@ export function Setup({ onDone }: { onDone: () => void }) {
       <form className="flex gap-2" onSubmit={e => { e.preventDefault(); addPlace('other', placeName); setPlaceName(''); }}><input className={inputCls} value={placeName} onChange={e => setPlaceName(e.target.value)} placeholder="Another place, e.g. Grandma's" /><Btn type="submit" disabled={!placeName.trim()}>Add</Btn></form>
       {places.length > 0 && <div className="flex flex-wrap gap-1.5">{places.map(p => <span key={p.id} className="inline-flex items-center gap-1 rounded-md bg-linen px-2 py-1 text-xs">{p.name}<button aria-label={`Remove ${p.name}`} onClick={() => setPlaces(places.filter(x => x.id !== p.id))}><X size={12} /></button></span>)}</div>}
     </div> },
-    { q: 'Want to add your schedule?', hint: 'Snap a photo, paste a link, or just say it. You check everything before it’s added.', body: <div className="grid gap-2">
-      <Btn kind="quiet" className="justify-start py-3" onClick={() => finish(() => openTalk('photo'))}><Camera size={18} />Take or upload a photo</Btn>
-      <Btn kind="quiet" className="justify-start py-3" onClick={() => finish(() => openTalk('link'))}><Link2 size={18} />Paste a calendar link</Btn>
-      <Btn kind="quiet" className="justify-start py-3" onClick={() => finish(() => openTalk('voice'))}><Mic size={18} />Say it, like “I work Monday to Thursday 8 to 4”</Btn>
+    { q: 'Got a picture of your schedule?', hint: 'Add it here. Class, shift or practice schedules, even a screenshot. You check everything before it’s added.', body: <div className="grid gap-2">
+      <Btn kind="primary" className="justify-start py-3" onClick={() => pickPhotos('camera', () => finish())}><Camera size={18} />Take a photo</Btn>
+      <Btn kind="quiet" className="justify-start py-3" onClick={() => pickPhotos('upload', () => finish())}><ImagePlus size={18} />Choose photos or screenshots</Btn>
+      <Btn kind="quiet" className="justify-start py-3" onClick={() => finish(() => openPhotoImport({ from: 'menu' }))}><Link2 size={18} />Paste a link instead</Btn>
+      <Btn kind="quiet" className="justify-start py-3" onClick={() => finish(() => openTalk('voice'))}><Mic size={18} />Say it out loud</Btn>
       <Btn kind="quiet" className="justify-start py-3" onClick={() => finish(() => go({ settings: true, settingsFocus: 'connections' }))}>Connect a calendar account</Btn>
     </div> },
   ];

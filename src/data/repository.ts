@@ -3,7 +3,7 @@ import Dexie, { type Table } from 'dexie';
 // The UI only ever talks to `Repository`. Today it's IndexedDB (Dexie) on-device;
 // a SupabaseRepository can implement the same interface later without UI changes.
 
-export const TABLES = ['blocks', 'tasks', 'people', 'places', 'memory'] as const;
+export const TABLES = ['blocks', 'tasks', 'people', 'places', 'memory', 'photos'] as const;
 export type TableName = (typeof TABLES)[number];
 
 export interface Repository {
@@ -26,7 +26,7 @@ class OrozDB extends Dexie {
     const schema: Record<string, string> = { kv: 'key' };
     for (const t of TABLES) schema[t] = 'id';
     schema.blocks = 'id, start, taskId';
-    this.version(1).stores(schema);
+    this.version(2).stores(schema);
   }
 }
 

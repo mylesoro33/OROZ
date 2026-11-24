@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, X, ExternalLink, Cloud, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, ExternalLink, Cloud, MapPin, Camera, ImagePlus } from 'lucide-react';
 import type { Block } from '@engine/types';
 import { itemsFor, bandsFor, daySummary, errandHints, nudges, weatherNote, type Nudge, type Band } from '@engine/week';
 import { nightFor } from '@engine/sleep';
 import { MIN, addDays, startOfDay, fmtDay, fmtTime, dayName, isoDay, hm, parseHM } from '@engine/time';
 import { useApp, store } from '../../data/store';
-import { go, openTalk } from '../nav';
+import { go, openTalk, pickPhotos } from '../nav';
 import { Btn, Card, Sheet, cx, isOwn, useNow } from '../ui';
 import { DayColumn } from '../components/DayColumn';
 import { SleepDial } from '../components/SleepDial';
@@ -20,7 +20,8 @@ export function Schedule() {
   const [bedFor, setBedFor] = useState<number | null>(null);
   const step = mode === 'day' ? 1 : 7;
   const connected = Object.values(st.connections).some(c => c?.connected);
-  const nudge = nudges({ now, profile: st.profile, blocks: st.blocks, people: st.people, places: st.places, dismissed: st.dismissed, hasKey: !!st.settings.apiKey, connected, workDays: st.settings.workDays, foundDates: st.foundDates })[0];
+  const sparse = !st.dismissed.includes('photo-card') && [0, 1, 2, 3, 4, 5, 6].reduce((n, i) => n + itemsFor(addDays(startOfDay(now), i), st.blocks, st.tasks).filter(b => !b.allDay).length, 0) < 4;
+  const nudge = nudges({ now, profile: st.profile, blocks: st.blocks, people: st.people, places: st.places, dismissed: st.dismissed, hasKey: !!st.settings.apiKey, connected, workDays: st.settings.workDays, foundDates: st.foundDates }).filter(n => !(sparse && n.id === 'connect'))[0];
 
   const runNudge = (n: Nudge) => {
     const a = n.action;
@@ -49,6 +50,7 @@ export function Schedule() {
     <div className="flex-1 overflow-y-auto px-5 pb-40">
       {mode === 'day' ? <>
         <SummaryCard day={day} now={now} />
+        {sparse && <PhotoCard />}
         {nudge && <div className="rise mb-3 flex items-center gap-3 rounded-xl border border-line bg-linen/50 px-4 py-2.5">
           <p className="flex-1 text-sm">{nudge.text}</p>
           <button className="shrink-0 text-sm font-medium text-green" onClick={() => runNudge(nudge)}>{nudge.cta}</button>
@@ -74,6 +76,20 @@ function SummaryCard({ day, now }: { day: number; now: number }) {
     <p className="serif text-[17px]">{s.on}</p>
     <p className="mt-0.5 text-sm text-muted">{s.open}{s.coming ? <> · <span className="text-clay">{s.coming}</span></> : null}</p>
     {s.weather && <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted"><Cloud size={13} strokeWidth={1.6} />{s.weather}</p>}
+  </Card>;
+}
+
+/** The fastest way to fill an empty calendar. Shows while the week is sparse. */
+function PhotoCard() {
+  return <Card className="mb-3">
+    <div className="flex items-start justify-between gap-2"><div>
+      <p className="serif text-lg font-semibold">Add your schedule from a photo</p>
+      <p className="mt-0.5 text-sm text-muted">Classes, shifts, practices. Screenshots work too.</p></div>
+      <button aria-label="Not now" className="p-1 text-muted" onClick={() => store().dismiss('photo-card')}><X size={15} /></button></div>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <Btn kind="primary" className="py-2.5" onClick={() => pickPhotos('camera')}><Camera size={18} />Camera</Btn>
+      <Btn className="py-2.5" onClick={() => pickPhotos('upload')}><ImagePlus size={18} />Upload</Btn>
+    </div>
   </Card>;
 }
 

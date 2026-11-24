@@ -11,6 +11,15 @@ A calendar-first life planner for anyone: students, workers, parents, retirees. 
 - **Settings** (the gear): connections, your Claude key, theme, and data export or deletion.
 - **Tell OROZ** (the big button): say or type things like "Pick up Jake at 4:30 Thursday" or "I work Monday to Thursday 8 to 4", snap a photo of a schedule, or paste a link. You always see a draft before anything is added.
 
+## Add from photo
+The fastest way to fill the calendar. Tap **Camera** or **Upload** on the Schedule card, the camera next to Tell OROZ, or **Add from photo** in the Tell OROZ sheet. It's also offered during setup.
+- Several pages or screenshots at once: class, shift, practice, bell or rotating (A/B, Day 1/2) schedules, printed or handwritten.
+- OROZ reads them and asks only what it needs: weekly or rotating, start and end dates, and whether it's for you or someone else.
+- **Looks right?** shows your photo beside the draft. Repeating items are grouped, unsure items are marked, and days already on your calendar are skipped. Tap any row to fix it, or add one that was missed.
+- Nothing is added until you tap **Confirm**, and you get Undo right after.
+- OROZ then offers to save your usual hours and lunch to your Profile, and asks whether to delete the photo (the default) or keep a copy on this device.
+- Links work the same way. Reading photos needs your Claude key; photos are sent only to be read.
+
 ## Run it
 ```bash
 npm install

@@ -44,8 +44,12 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   </div>;
 }
 
+/** A label for a single input; a labelled group for anything else (chip rows, date pairs). */
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block py-1.5"><span className="mb-1 block text-xs font-medium text-muted">{label}</span>{children}</label>;
+  const single = React.isValidElement(children) && ['input', 'textarea', 'select'].includes(children.type as string);
+  const id = React.useId();
+  if (single) return <label className="block py-1.5"><span className="mb-1 block text-xs font-medium text-muted">{label}</span>{children}</label>;
+  return <div className="block py-1.5" role="group" aria-labelledby={id}><span id={id} className="mb-1 block text-xs font-medium text-muted">{label}</span>{children}</div>;
 }
 export const inputCls = 'w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-green';
 

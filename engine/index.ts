@@ -10,3 +10,4 @@ export * from './occasions';
 export * from './reflow';
 export * from './history';
 export * from './ics';
+export * from './scan';

@@ -25,10 +25,13 @@ export interface Draft {
 export const emptyDraft = (title: string, extra: Partial<Draft> = {}): Draft => ({ id: uid('draft'), title, events: [], tasks: [], people: [], dates: [], ...extra });
 export const draftSize = (d: Draft) => d.events.length + d.tasks.length + d.people.length + d.dates.length;
 
+/** A schedule photo kept only if the person chose to keep it. */
+export interface SavedPhoto { id: string; at: number; title: string; dataUrl: string; seriesIds: string[] }
+
 export interface WeatherDay { date: string; tmax: number; tmin: number; precip: number; code: number }
 
 export interface AppData {
-  blocks: Block[]; tasks: Task[]; people: Person[]; places: Place[]; memory: Memory[];
+  blocks: Block[]; tasks: Task[]; people: Person[]; places: Place[]; memory: Memory[]; photos: SavedPhoto[];
   settings: Settings; profile: Profile;
   connections: Partial<Record<ConnectionId, Connection>>;
   dismissed: string[];
@@ -42,7 +45,7 @@ const KV = ['settings', 'profile', 'connections', 'dismissed', 'attendees', 'wea
 
 export class Store {
   state: AppData = {
-    blocks: [], tasks: [], people: [], places: [], memory: [], settings: defaultSettings(), profile: { setupDone: false },
+    blocks: [], tasks: [], people: [], places: [], memory: [], photos: [], settings: defaultSettings(), profile: { setupDone: false },
     connections: {}, dismissed: [], attendees: {}, weather: null, foundDates: false, ready: false,
   };
   private listeners = new Set<() => void>();
@@ -53,7 +56,7 @@ export class Store {
 
   async load() {
     const next = { ...this.state };
-    for (const t of ['blocks', 'tasks', 'people', 'places', 'memory'] as TableName[]) (next as any)[t] = await this.repo.all(t);
+    for (const t of ['blocks', 'tasks', 'people', 'places', 'memory', 'photos'] as TableName[]) (next as any)[t] = await this.repo.all(t);
     for (const k of KV) { const v = await this.repo.getKV(k); if (v !== undefined) (next as any)[k] = v; }
     const d = defaultSettings();
     next.settings = { ...d, ...next.settings, sleep: { ...d.sleep, ...next.settings.sleep } };

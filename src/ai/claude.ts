@@ -114,15 +114,6 @@ async function run(content: any, opts: { title: string; source: 'talk' | 'photo'
 
 export const talk = (text: string, onStatus?: (s: string) => void) => run(text, { title: 'From what you said', source: 'talk', keep: true, onStatus });
 
-export async function readPhoto(file: File, onStatus?: (s: string) => void): Promise<AiResult> {
-  onStatus?.('Reading the photo…');
-  const { data, type } = await shrink(file);
-  return run([
-    { type: 'image', source: { type: 'base64', media_type: type, data } },
-    { type: 'text', text: `This is a photo of a schedule. Read every entry and call draft_items. Weekly schedules (classes, shifts, practices) should use repeat_weekdays starting this week (${isoDay(startOfDay(Date.now()))}). If a time is unreadable, leave it out rather than guess. Then say in one line what you found.` },
-  ], { title: 'From your photo', source: 'photo', onStatus, effort: 'medium' });
-}
-
 export const readPage = (url: string, onStatus?: (s: string) => void) => run(
   `Open ${url} with web_fetch. Find the upcoming events or schedule on it (from today, ${isoDay(Date.now())}, onward) and call draft_items with them. If the page links to a calendar feed or a schedule page, follow it. Then say in one line what you found.`,
   { title: `From ${host(url)}`, source: 'link', onStatus, effort: 'medium' });
@@ -140,12 +131,3 @@ Only include dates you found on a page, each with its source_url. Skip anything 
     { title: 'Important dates', source: 'web', onStatus, effort: 'medium' });
 }
 
-/** Downscale photos so they upload fast. */
-async function shrink(file: File): Promise<{ data: string; type: 'image/jpeg' }> {
-  const img = await createImageBitmap(file);
-  const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
-  const c = document.createElement('canvas'); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
-  c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-  const url = c.toDataURL('image/jpeg', 0.85);
-  return { data: url.split(',')[1], type: 'image/jpeg' };
-}

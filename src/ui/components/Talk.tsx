@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Camera, Link2, ArrowUp, Keyboard, X } from 'lucide-react';
-import { useNav, go } from '../nav';
+import { useNav, go, pickPhotos, openPhotoImport } from '../nav';
 import { store, type Draft } from '../../data/store';
-import { tell, link as readLink, photo as readPhoto, type Reply } from '../../ai/router';
+import { tell, type Reply } from '../../ai/router';
 import { DraftReview } from './DraftReview';
 import { FitIn } from './FitIn';
 import { Btn, cx, inputCls } from '../ui';
 import { toast } from '../toast';
 
 /** The big button. The main way to add anything. */
-export function TalkButton() {
-  return <button onClick={() => go({ talk: true, talkMode: 'voice' })} aria-label="Tell OROZ"
-    className="fixed bottom-[80px] left-1/2 z-30 flex h-14 -translate-x-1/2 items-center gap-2.5 rounded-full bg-ink pl-5 pr-6 text-paper shadow-[0_6px_18px_rgba(40,32,20,.25)] active:scale-[.98]">
-    <Mic size={22} strokeWidth={2} /><span className="text-[15px] font-semibold tracking-wide">Tell <span className="wordmark">OROZ</span></span>
-  </button>;
+export function TalkButton({ withCamera }: { withCamera?: boolean }) {
+  return <div className="fixed bottom-[80px] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2">
+    <button onClick={() => go({ talk: true, talkMode: 'voice' })} aria-label="Tell OROZ"
+      className="flex h-14 items-center gap-2.5 rounded-full bg-ink pl-5 pr-6 text-paper shadow-[0_6px_18px_rgba(40,32,20,.25)] active:scale-[.98]">
+      <Mic size={22} strokeWidth={2} /><span className="whitespace-nowrap text-[15px] font-semibold tracking-wide">Tell <span className="wordmark">OROZ</span></span>
+    </button>
+    {withCamera && <button onClick={() => pickPhotos('camera')} aria-label="Add from photo" title="Add from photo"
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-card text-ink shadow-sm active:scale-[.97]"><Camera size={19} strokeWidth={1.75} /></button>}
+  </div>;
 }
 
 const SR = () => (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -28,15 +32,13 @@ export function TalkSheet() {
   const [reply, setReply] = useState<Reply | null>(null);
   const [fit, setFit] = useState<string | null>(null);
   const rec = useRef<any>(null);
-  const file = useRef<HTMLInputElement>(null);
 
   const close = () => { rec.current?.abort?.(); go({ talk: false }); setReply(null); setHeard(''); setText(''); setFit(null); };
   useEffect(() => {
     if (!nav.talk) return;
     const m = nav.talkMode ?? 'voice';
     setReply(null); setFit(null);
-    if (m === 'photo') { setMode('type'); setTimeout(() => file.current?.click(), 50); }
-    else if (m === 'link') setMode('link');
+    if (m === 'photo' || m === 'link') { openPhotoImport({ from: m === 'link' ? 'menu' : 'menu' }); return; }
     else if (m === 'voice' && SR()) { setMode('voice'); listen(); }
     else setMode('type');
   }, [nav.talk]);
@@ -56,7 +58,8 @@ export function TalkSheet() {
     r.onend = () => setListening(false);
     setHeard(''); setListening(true); r.start();
   }
-  const submit = () => { const t = text.trim(); if (!t) return; setHeard(t); setText(''); run(() => (mode === 'link' ? readLink(t, setBusy) : tell(t, setBusy))); };
+  const isLink = (t: string) => !/\s/.test(t) && /^https?:\/\/|^webcal:|^www\.|\.(com|org|edu|net|gov|ics)(\/|$)/i.test(t);
+  const submit = () => { const t = text.trim(); if (!t) return; if (mode === 'link' || isLink(t)) { setText(''); openPhotoImport({ link: t, from: 'link' }); return; } setHeard(t); setText(''); run(() => tell(t, setBusy)); };
   const done = (added: boolean, d: Draft) => {
     if (!added) { setReply(null); return; }
     const fitId = reply?.fitTaskId && d.tasks.some(t => t.id === reply.fitTaskId) ? reply.fitTaskId : undefined;
@@ -85,15 +88,22 @@ export function TalkSheet() {
 
       {mode === 'voice' ? <div className="flex flex-col items-center gap-3 pt-2">
         <button onClick={listen} aria-label={listening ? 'Listening' : 'Speak'} className={cx('flex h-20 w-20 items-center justify-center rounded-full text-paper shadow-md', listening ? 'animate-pulse bg-clay' : 'bg-ink')}><Mic size={32} /></button>
-        <div className="flex gap-1"><IconBtn label="Type" onClick={() => setMode('type')}><Keyboard size={18} /></IconBtn><IconBtn label="Photo" onClick={() => file.current?.click()}><Camera size={18} /></IconBtn><IconBtn label="Link" onClick={() => setMode('link')}><Link2 size={18} /></IconBtn></div>
+        <div className="grid w-full grid-cols-3 gap-2 pt-1">
+          <MenuBtn label="Type" onClick={() => setMode('type')}><Keyboard size={18} /></MenuBtn>
+          <MenuBtn label="Add from photo" onClick={() => pickPhotos('upload')}><Camera size={18} /></MenuBtn>
+          <MenuBtn label="Paste a link" onClick={() => setMode('link')}><Link2 size={18} /></MenuBtn>
+        </div>
       </div> : <form onSubmit={e => { e.preventDefault(); submit(); }} className="flex items-center gap-2">
         <input autoFocus value={text} onChange={e => setText(e.target.value)} className={inputCls} placeholder={mode === 'link' ? 'https://…' : 'Tell OROZ…'} aria-label={mode === 'link' ? 'Link' : 'Tell OROZ'} inputMode={mode === 'link' ? 'url' : 'text'} />
         {text.trim() ? <Btn kind="primary" type="submit" aria-label="Send" className="h-10 w-10 shrink-0 p-0"><ArrowUp size={18} /></Btn>
-          : <><IconBtn label="Speak" onClick={() => { setMode('voice'); listen(); }}><Mic size={18} /></IconBtn><IconBtn label="Photo" onClick={() => file.current?.click()}><Camera size={18} /></IconBtn>{mode !== 'link' && <IconBtn label="Link" onClick={() => setMode('link')}><Link2 size={18} /></IconBtn>}</>}
+          : <><IconBtn label="Speak" onClick={() => { setMode('voice'); listen(); }}><Mic size={18} /></IconBtn><IconBtn label="Add from photo" onClick={() => pickPhotos('upload')}><Camera size={18} /></IconBtn>{mode !== 'link' && <IconBtn label="Link" onClick={() => setMode('link')}><Link2 size={18} /></IconBtn>}</>}
       </form>}
-      <input ref={file} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setHeard('Photo of a schedule'); run(() => readPhoto(f, setBusy)); } e.target.value = ''; }} />
     </div>
   </div>;
+}
+
+function MenuBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" onClick={onClick} className="flex flex-col items-center gap-1 rounded-lg border border-line bg-card px-2 py-2.5 text-xs text-ink hover:bg-linen">{children}{label}</button>;
 }
 
 function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {

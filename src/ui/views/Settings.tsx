@@ -79,11 +79,25 @@ function Preferences() {
       <p className="text-xs text-muted">Lets OROZ understand anything you say, read photos and web pages, and look up dates. Stored on this device. Turn on web search for the key in the Claude Console.</p>
       <Field label="Google client ID"><input className={inputCls} value={s.googleClientId ?? ''} placeholder={import.meta.env.VITE_GOOGLE_CLIENT_ID ? 'set in .env' : 'xxxx.apps.googleusercontent.com'} onChange={e => set({ googleClientId: e.target.value.trim() || undefined })} /></Field>
     </Card>
+    <SavedPhotos />
     <Heading>Data</Heading>
     <Card className="flex flex-wrap gap-2">
       <Btn onClick={async () => { const blob = new Blob([await store().exportJSON()], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'oroz-data.json'; a.click(); }}><Download size={15} />Export</Btn>
       <Btn kind="danger" onClick={() => { if (confirm('Delete everything OROZ has saved on this device?')) store().wipe(); }}><Trash2 size={15} />Delete all</Btn>
     </Card>
     <p className="mt-3 text-xs text-muted">Everything stays on this device.</p>
+  </>;
+}
+
+function SavedPhotos() {
+  const photos = useApp(s => s.photos);
+  if (!photos.length) return null;
+  return <>
+    <Heading>Saved schedule photos</Heading>
+    <Card className="divide-y divide-line p-0">{photos.map(p => <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+      <a href={p.dataUrl} target="_blank" rel="noreferrer"><img src={p.dataUrl} alt={p.title} className="h-12 w-10 rounded border border-line object-cover" /></a>
+      <span className="flex-1 text-sm">{p.title}<span className="block text-xs text-muted">{new Date(p.at).toLocaleDateString()}</span></span>
+      <button aria-label="Delete photo" className="p-1 text-muted hover:text-clay" onClick={() => store().remove('photos', [p.id])}><Trash2 size={15} /></button>
+    </div>)}</Card>
   </>;
 }
