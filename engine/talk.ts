@@ -29,7 +29,9 @@ export function talkToDraft(text: string, now: Ms, places: Place[] = []): TalkDr
   const c = parseCapture(stripped, { now, places: places.map(p => ({ id: p.id, name: p.name })) });
   const place = c.place ? places.find(p => p.id === c.place!.id) : places.find(p => new RegExp(`\\b(at|to|from) (the )?${p.name.toLowerCase()}\\b`).test(l));
   const atName = !place ? cleaned.match(/\bat (the )?([A-Z][\w'&-]+(?: [A-Z][\w'&-]+)*)/)?.[2] : undefined;
-  const title = cap(restoreCase(c.title.replace(/\s+(at|on|by)$/i, '').trim() || cleaned, cleaned));
+  const actionFirst = /^(buy|get|plan|make|order|wrap|send|call|text|pick up|book|find)\b/i.test(cleaned);
+  const rawTitle = actionFirst && ['birthday', 'food_pref', 'person_pref', 'command', 'note'].includes(c.kind) ? stripped : c.title;
+  const title = cap(restoreCase(rawTitle.replace(/\s+(at|on|by)$/i, '').trim() || cleaned, cleaned));
   const type = guessType(cleaned);
   const day = c.day ?? (extractDate(l, now).day);
 
@@ -42,7 +44,6 @@ export function talkToDraft(text: string, now: Ms, places: Place[] = []): TalkDr
     const task: Task = { id: uid('task'), title, type, at: c.start, date: startOfDay(c.start), durationMin: c.durationMin ?? 30, placeId: place?.id, placeName: place?.name ?? atName, done: false, source: 'talk', createdAt: now };
     return { kind: 'task', task, line: `${title}, ${fmtDay(c.start, now)} at ${fmtTime(c.start)}.` };
   }
-  const actionFirst = /^(buy|get|plan|make|order|wrap|send|call|text|pick up|book|find)\b/i.test(cleaned);
   if (c.kind === 'birthday' && !actionFirst) return { kind: 'person', person: { name: c.person ?? 'Someone', month: c.month, day: c.dayOfMonth }, line: c.month ? `${c.person}'s birthday, ${c.month}/${c.dayOfMonth}.` : `When is ${c.person}'s birthday?` };
   if (!actionFirst && (c.kind === 'command' || c.kind === 'food_pref' || c.kind === 'person_pref')) return { kind: 'none', line: '' };
   const by = thisWeek ? addDays(startOfDay(now), 7 - new Date(now).getDay() || 7) : day !== undefined ? addDays(day, 1) : undefined;
