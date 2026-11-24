@@ -5,6 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
+  base: './', // works at any sub-path (e.g. GitHub Pages /OROZ/)
   resolve: { alias: { '@engine': fileURLToPath(new URL('./engine', import.meta.url)) } },
   plugins: [
     react(),
@@ -22,7 +23,8 @@ export default defineConfig({
         theme_color: '#4f46e5',
         background_color: '#0b0b12',
         display: 'standalone',
-        start_url: '/',
+        start_url: './',
+        scope: './',
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },

@@ -17,7 +17,7 @@ export async function requestNotifications(): Promise<NotificationPermission | '
 export async function notify(title: string, body: string, tag: string, aggressive: boolean) {
   if (notifPermission() !== 'granted') return false;
   const reg = await navigator.serviceWorker?.getRegistration();
-  const opts: NotificationOptions & { renotify?: boolean; actions?: { action: string; title: string }[] } = { body, tag, icon: '/icon-192.png', badge: '/icon-192.png', requireInteraction: aggressive, renotify: aggressive, data: { tag }, actions: [{ action: 'snooze10', title: 'Snooze 10m' }, { action: 'done', title: 'Done' }] };
+  const opts: NotificationOptions & { renotify?: boolean; actions?: { action: string; title: string }[] } = { body, tag, icon: 'icon-192.png', badge: 'icon-192.png', requireInteraction: aggressive, renotify: aggressive, data: { tag }, actions: [{ action: 'snooze10', title: 'Snooze 10m' }, { action: 'done', title: 'Done' }] };
   if (reg) await reg.showNotification(title, opts); else new Notification(title, opts);
   return true;
 }

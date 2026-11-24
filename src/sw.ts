@@ -17,7 +17,7 @@ self.addEventListener('notificationclick', event => {
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     if (all.length) { all[0].postMessage(msg); await (all[0] as WindowClient).focus(); }
-    else await self.clients.openWindow('/?reminder=' + encodeURIComponent(msg.tag ?? ''));
+    else await self.clients.openWindow(self.registration.scope + '?reminder=' + encodeURIComponent(msg.tag ?? ''));
   })());
 });
 
