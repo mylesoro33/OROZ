@@ -1,4 +1,4 @@
-import type { Block, Task, Settings, Person } from '../types';
+import type { Block, Task, Settings, Person, Place } from '../types';
 import { defaultSettings } from '../defaults';
 import { at, addDays } from '../time';
 
@@ -8,7 +8,7 @@ export const T = (day: number, hm: string) => at(addDays(MON, day), hm);
 export const settings = (): Settings => defaultSettings();
 let n = 0;
 export const block = (title: string, start: number, end: number, over: Partial<Block> = {}): Block =>
-  ({ id: `b${n++}`, title, kind: 'class', start, end, fixed: true, source: 'manual', ...over });
-export const schoolDay = (d: number) => [block('Classes AM', T(d, '08:00'), T(d, '11:30')), block('Classes PM', T(d, '12:15'), T(d, '15:00'))];
-export const task = (title: string, over: Partial<Task> = {}): Task => ({ id: title, title, type: 'school', done: false, source: 'manual', createdAt: MON, ...over });
+  ({ id: `b${n++}`, title, kind: 'event', start, end, fixed: true, source: 'manual', ...over });
+export const task = (title: string, over: Partial<Task> = {}): Task => ({ id: title, title, type: 'errand', durationMin: 30, done: false, source: 'manual', createdAt: MON, ...over });
 export const person = (name: string, over: Partial<Person> = {}): Person => ({ id: name, name, source: 'manual', ...over });
+export const place = (name: string, over: Partial<Place> = {}): Place => ({ id: name.toLowerCase(), name, kind: 'other', ...over });

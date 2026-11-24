@@ -3,9 +3,8 @@
 export type ID = string;
 export type Ms = number;
 
-export type Source = 'manual' | 'chat' | 'google-calendar' | 'classroom' | 'schoology' | 'google-tasks' | 'school-calendar' | 'contacts' | 'web';
-export type BlockKind = 'class' | 'event' | 'study' | 'meal' | 'sleep' | 'birthday' | 'no-school';
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type Source = 'manual' | 'talk' | 'photo' | 'link' | 'web' | 'google-calendar' | 'apple-calendar' | 'outlook' | 'classroom' | 'school-feed' | 'google-tasks' | 'contacts';
+export type BlockKind = 'event' | 'class' | 'work' | 'todo' | 'date';
 
 export interface Block {
   id: ID;
@@ -13,25 +12,28 @@ export interface Block {
   kind: BlockKind;
   start: Ms;
   end: Ms;
-  fixed: boolean;            // imported / fixed events never move
+  allDay?: boolean;
+  fixed: boolean;            // imported events never move
   source: Source;
-  seriesId?: ID;             // weekly repeats share a series
+  seriesId?: ID;
   externalId?: string;
   location?: string;
-  notes?: string;
-  mealType?: MealType;
-  allDay?: boolean;
-  derived?: boolean;         // sleep/meals computed on the fly, never stored
-  reason?: string;
+  placeId?: ID;
+  sourceUrl?: string;        // where an important date came from
+  taskId?: ID;               // a to-do placed on the calendar
 }
 
-export type TaskType = 'school' | 'work' | 'personal' | 'errand' | 'event';
+export type TaskType = 'errand' | 'call' | 'home' | 'work' | 'school' | 'health' | 'social';
 export interface Task {
   id: ID;
   title: string;
-  due?: Ms;
-  tag?: string;              // class / label
   type: TaskType;
+  date?: Ms;                 // optional day (start of day) or due
+  at?: Ms;                   // a set time → shows on the calendar
+  durationMin: number;
+  placeId?: ID;
+  placeName?: string;
+  by?: Ms;                   // "sometime this week" → fit in before this
   done: boolean;
   doneAt?: Ms;
   source: Source;
@@ -39,36 +41,46 @@ export interface Task {
   createdAt: Ms;
 }
 
+export type PlaceKind = 'home' | 'work' | 'school' | 'gym' | 'church' | 'coffee' | 'friend' | 'relative' | 'store' | 'other';
+export interface Place { id: ID; name: string; kind: PlaceKind; address?: string }
+
 export interface Person {
   id: ID;
   name: string;
   relationship?: string;
   birthday?: { month: number; day: number; year?: number };
   source: Source;
-  link?: string;             // public profile the user provided
-  notes?: string[];
+  link?: string;
+  close?: boolean;
 }
 
-export interface MealSlot { type: MealType; window: [string, string]; durationMin: number; minDurationMin: number }
+export type Occupation = 'student' | 'working' | 'both' | 'home' | 'retired' | 'other';
+export interface Profile {
+  name?: string;
+  ageRange?: string;
+  occupation?: Occupation;
+  occupationDetail?: string; // grade/level, or kind of work + hours
+  hometown?: string;
+  city?: string;
+  setupDone: boolean;
+}
 
-/** Sleep is a range, not a fixed time. Each night can be overridden. */
+export interface MealWindow { type: 'breakfast' | 'lunch' | 'dinner'; from: string; to: string }
+
+/** Sleep is soft: a default per kind of night, and any night can differ. */
 export interface SleepPrefs {
-  schoolNight: { bedtime: string; flexMin: number; wake: string };  // flexMin: ± range around bedtime
-  weekend: { bedtime: string; flexMin: number; wake: string };
-  minSleepMin: number;
-  windDownMin: number;       // homework should wrap this long before bed
+  weeknight: { bedtime: string; wake: string };
+  weekend: { bedtime: string; wake: string };
   overrides: Record<string, string>; // 'YYYY-MM-DD' (night of) → bedtime 'HH:MM'
 }
 
 export interface Settings {
   sleep: SleepPrefs;
-  meals: MealSlot[];
-  schoolDays: number[];      // 1..5 by default
+  meals: MealWindow[];
+  workDays: number[];        // nights before these are "weeknights"
   theme: 'system' | 'light' | 'dark';
   apiKey?: string;
   googleClientId?: string;
 }
 
-export interface Profile { name?: string; school?: string; grade?: string; setupDone: boolean }
-
-export interface Memory { id: ID; text: string; at: Ms }
+export interface Memory { id: ID; text: string; at: Ms; topic?: string }

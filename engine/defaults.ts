@@ -1,20 +1,14 @@
-import type { Settings, MealSlot } from './types';
-
-export const DEFAULT_MEALS: MealSlot[] = [
-  { type: 'breakfast', window: ['06:30', '08:30'], durationMin: 20, minDurationMin: 10 },
-  { type: 'lunch', window: ['11:00', '13:30'], durationMin: 30, minDurationMin: 15 },
-  { type: 'dinner', window: ['17:30', '20:30'], durationMin: 40, minDurationMin: 20 },
-];
+import type { Settings } from './types';
 
 export function defaultSettings(): Settings {
   return {
-    sleep: {
-      schoolNight: { bedtime: '22:45', flexMin: 30, wake: '06:45' },
-      weekend: { bedtime: '23:30', flexMin: 45, wake: '08:30' },
-      minSleepMin: 480, windDownMin: 60, overrides: {},
-    },
-    meals: DEFAULT_MEALS.map(m => ({ ...m, window: [...m.window] as [string, string] })),
-    schoolDays: [1, 2, 3, 4, 5],
+    sleep: { weeknight: { bedtime: '22:45', wake: '06:45' }, weekend: { bedtime: '23:30', wake: '08:30' }, overrides: {} },
+    meals: [
+      { type: 'breakfast', from: '07:00', to: '08:00' },
+      { type: 'lunch', from: '12:00', to: '13:00' },
+      { type: 'dinner', from: '18:00', to: '19:30' },
+    ],
+    workDays: [1, 2, 3, 4, 5],
     theme: 'system',
   };
 }

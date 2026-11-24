@@ -97,13 +97,12 @@ export function expand(ev: IcsEvent, from: Ms, to: Ms): IcsEvent[] {
 }
 
 /** Calendar events → fixed blocks (imported events can never be moved by the planner). */
-export function icsToBlocks(text: string, from: Ms, to: Ms, source: Source = 'school-calendar'): Block[] {
+export function icsToBlocks(text: string, from: Ms, to: Ms, source: Source = 'link'): Block[] {
   const blocks: Block[] = [];
   for (const ev of parseIcs(text)) for (const o of expand(ev, from, to)) {
-    const noSchool = /no school|holiday|break|teacher (work|in-?service)|day off/i.test(o.summary);
     blocks.push({
       id: `${source}_${hashId(o.uid)}`, externalId: o.uid, title: o.summary,
-      kind: noSchool ? 'no-school' : /class|period|lecture|lab\b/i.test(o.summary + (o.categories ?? '')) ? 'class' : 'event',
+      kind: /\b(class|period|lecture|lab)\b/i.test(o.summary + (o.categories ?? '')) ? 'class' : /\bshift\b/i.test(o.summary) ? 'work' : 'event',
       start: o.start, end: o.end, fixed: true, source, location: o.location, allDay: o.allDay || undefined,
     });
   }

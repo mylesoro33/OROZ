@@ -1,4 +1,5 @@
-import type { Ms, MealType, ID } from './types';
+import type { Ms, ID } from './types';
+type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 import { at, addDays, startOfDay, weekday, MIN } from './time';
 
 // Offline, rule-based natural-language capture. An optional LLM can refine the
