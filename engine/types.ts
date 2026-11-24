@@ -55,6 +55,7 @@ export interface Task {
   createdAt: Ms;
   notes?: string;
   kind?: 'task' | 'grocery' | 'gift' | 'prep';
+  notBefore?: Ms;           // don't start before (e.g. previous stage of a project/occasion)
 }
 
 export type MilestoneKind = 'research' | 'outline' | 'draft' | 'revise' | 'submit';

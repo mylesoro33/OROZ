@@ -74,6 +74,8 @@ export function planMilestones(p: Pick<Project, 'id' | 'title' | 'due' | 'effort
     importance: m.kind === 'submit' ? 'aggressive' : 'normal', location: 'anywhere',
   }));
   milestones.forEach(m => (m.taskId = `t_${m.id}`));
+  // Each stage opens a day before the previous one is due, so work flows in order.
+  for (let i = 1; i < tasks.length; i++) tasks[i].notBefore = Math.max(now, milestones[i - 1].due - DAY);
   return { milestones, tasks, warnings, startBy: Math.max(start, now) };
 }
 

@@ -53,43 +53,54 @@ export function leadDaysFor(o: Occasion, person?: Person): number {
 export type StageKey = 'brainstorm' | 'decide' | 'order' | 'wrap' | 'reserve' | 'card' | 'celebrate' | 'shopping' | 'travel' | 'outfit' | 'food';
 export interface OccasionStage { key: StageKey; title: string; due: Ms; durationMin: number }
 
+const GIFT_HOLIDAYS = new Set(['Christmas', "Valentine's Day", "Mother's Day", "Father's Day"]);
+
 export function occasionStages(o: Occasion, person: Person | undefined, now: Ms, opts: { shippingDays?: number; dining?: boolean } = {}): OccasionStage[] {
   const lead = leadDaysFor(o, person);
   const date = o.date;
+  if (date < startOfDay(now)) return [];
   const ship = opts.shippingDays ?? 5;
   const name = person?.name ?? o.title;
   const close = (person?.closeness ?? 2) <= 2;
+  // Started late? Squeeze the stages proportionally into the days that are left.
+  const remaining = Math.max(0, (date - startOfDay(now)) / DAY);
+  const scale = remaining < lead ? remaining / lead : 1;
+  const canShip = remaining >= ship + 2;
   const st: OccasionStage[] = [];
-  const add = (key: StageKey, title: string, daysBefore: number, durationMin: number) => st.push({ key, title, due: at(addDays(date, -daysBefore), '19:00'), durationMin });
+  const add = (key: StageKey, title: string, daysBefore: number, durationMin: number) =>
+    st.push({ key, title, due: at(addDays(date, -Math.max(Math.floor(daysBefore * scale), Math.min(daysBefore, 1, Math.floor(remaining)))), '19:00'), durationMin });
+  const gifts = o.kind !== 'holiday' || GIFT_HOLIDAYS.has(o.title);
   if (o.kind === 'holiday' || o.kind === 'gathering') {
-    add('brainstorm', `${o.title}: brainstorm gifts & plans`, lead, 20);
-    add('decide', `${o.title}: decide gift list & budget`, Math.round(lead * 0.7), 20);
-    add('order', `${o.title}: order gifts (shipping ~${ship} days)`, ship + 3, 30);
-    add('card', `${o.title}: cards`, 7, 30);
+    if (gifts) {
+      add('brainstorm', `${o.title}: brainstorm gifts & plans`, lead, 20);
+      add('decide', `${o.title}: decide gift list & budget`, Math.round(lead * 0.7), 20);
+      add('order', canShip ? `${o.title}: order gifts (shipping ~${ship} days)` : `${o.title}: buy gifts locally (too late to ship)`, canShip ? ship + 3 : 2, 30);
+      add('card', `${o.title}: cards`, 7, 30);
+      add('wrap', `${o.title}: wrap gifts`, 2, 30);
+    } else add('brainstorm', `${o.title}: make a plan (who, where, what to bring)`, lead, 20);
     add('shopping', `${o.title}: shopping`, 5, 60);
     if (o.major) add('travel', `${o.title}: confirm travel plans`, 10, 20);
     add('outfit', `${o.title}: outfit ready`, 2, 15);
     add('food', `${o.title}: food or reservation sorted`, o.major ? 10 : 4, 20);
-    add('wrap', `${o.title}: wrap gifts`, 2, 30);
   } else {
     add('brainstorm', `Brainstorm gift ideas for ${name}`, lead, 15);
     add('decide', `Decide ${name}'s gift`, Math.max(ship + 4, Math.round(lead * 0.5)), 15);
-    add('order', `Order ${name}'s gift (leave ~${ship} days shipping)`, ship + 2, 20);
+    add('order', canShip ? `Order ${name}'s gift (leave ~${ship} days shipping)` : `Buy ${name}'s gift locally (too late to ship)`, canShip ? ship + 2 : 1, 20);
     if (close) add('card', `Card for ${name}`, 3, 15);
     add('wrap', `Wrap ${name}'s gift`, 1, 15);
     if (opts.dining ?? close) add('reserve', `Reserve a dinner for ${name}`, close ? 10 : 5, 15);
   }
   st.push({ key: 'celebrate', title: o.kind === 'birthday' ? `${name}'s birthday — celebrate!` : o.title, due: at(date, '09:00'), durationMin: 0 });
-  // Started late? Pull overdue prep stages up to "soon" instead of dropping them (keeps their order).
-  if (date < startOfDay(now)) return [];
-  const soon = now + 2 * 3_600_000;
+  // Anything still in the past gets pulled up to "soon" (keeps its order) rather than dropped.
+  const soon = remaining > 2 ? at(addDays(now, 1), '19:00') : now + 2 * 3_600_000;
   return st.map((x, i) => (x.key !== 'celebrate' && x.due < soon ? { ...x, due: soon + i * 60_000 } : x)).sort((a, b) => a.due - b.due);
 }
 
 export function stagesToTasks(o: Occasion, stages: OccasionStage[], now: Ms): Task[] {
-  return stages.filter(s => s.durationMin > 0).map(s => ({
+  return stages.filter(s => s.durationMin > 0).map((s, i, arr) => ({
+    notBefore: i === 0 ? undefined : Math.max(now, arr[i - 1].due - DAY),
     id: `oc_${hashId(`${o.id}_${s.key}_${new Date(o.date).getFullYear()}`)}`,
-    title: s.title, durationMin: s.durationMin, due: s.due, priority: s.key === 'order' ? 1 : 2,
+    title: s.title, durationMin: s.durationMin, due: s.due, priority: s.key === 'order' || s.key === 'reserve' ? 2 : 3,
     createdAt: now, kind: s.key === 'shopping' ? 'prep' : 'gift',
     importance: s.key === 'order' || s.key === 'reserve' ? 'aggressive' : 'normal',
     location: s.key === 'shopping' ? 'outside' : 'anywhere',

@@ -42,6 +42,12 @@ export function learnHabits(logs: LogEntry[], now: Ms, existing: Habit[] = []): 
     let bestI = 0, bestV = -1;
     for (let i = 0; i < 48; i++) { const v = buckets[i] + 0.5 * ((buckets[i - 1] ?? 0) + (buckets[i + 1] ?? 0)); if (v > bestV + 1e-12) { bestV = v; bestI = i; } }
     bestV = (buckets[bestI - 1] ?? 0) + buckets[bestI] + (buckets[bestI + 1] ?? 0);
+    let mSum = 0, mW = 0;
+    for (const e of entries) {
+      const t = e.actualStart ?? e.plannedStart ?? e.at; const m = minutesOfDay(t);
+      if (Math.abs(Math.floor(m / 30) - bestI) <= 1) { const w = decay(now - t); mSum += m * w; mW += w; }
+    }
+    const typical = Math.round((mW ? mSum / mW : bestI * 30) / 5) * 5;
     const concentration = bestV / total;
     const nWeeks = Math.max(1, weeks.size);
     const meanPerDay = total / 7;
@@ -51,7 +57,7 @@ export function learnHabits(logs: LogEntry[], now: Ms, existing: Habit[] = []): 
     const place = [...places.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     out.push({
       id: key, key, label: habitLabel(key), weekdays: weekdays.length === 7 || key.startsWith('meal:') && weekdays.length >= 5 ? [0, 1, 2, 3, 4, 5, 6] : weekdays,
-      windowStart: bestI * 30, windowEnd: Math.min(1440, bestI * 30 + 60), durationMin: Math.round(wDur / wSum),
+      windowStart: typical, windowEnd: Math.min(1440, typical + 60), durationMin: Math.round(wDur / wSum),
       placeId: place, confidence, samples: entries.length, status: 'learned',
     });
     void nWeeks;

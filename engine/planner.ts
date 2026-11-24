@@ -77,7 +77,21 @@ export function plan(input: PlanInput): PlanResult {
   for (const d of days) {
     const r = placeMealsForDay(d, settings, tl, rangeStart, wakeOf(d));
     added.push(...r.blocks); warnings.push(...r.warnings);
-    added.push(...detectMealGaps(d, settings, tl, wakeOf(d), bedOf(d), rangeStart));
+  }
+
+  // 4b. Learned holds: a confident nap habit gets its usual slot (optional, so work can't take it silently).
+  const nap = (input.habits ?? []).find(h => h.key === 'hobby:nap' && h.confidence >= 0.5 && h.status !== 'learned' || h.key === 'hobby:nap' && h.confidence >= 0.6);
+  if (nap) for (const d of days) {
+    if (!nap.weekdays.includes(weekday(d))) continue;
+    if (tl.blocks.some(b => (b.kind === 'nap' || b.activityId === 'nap') && startOfDay(b.start) === d)) continue;
+    const want = at(d, nap.windowStart), len = nap.durationMin * MIN;
+    for (const off of [0, 15, -15, 30, -30]) {
+      const s = want + off * MIN;
+      if (s >= rangeStart && tl.isFree(s, s + len, 5)) {
+        push({ id: `nap_${hashId(String(d))}`, title: `Nap (${nap.durationMin}m)`, kind: 'nap', start: s, end: s + len, flexibility: 'optional', source: 'planner', importance: 'passive', reason: `You usually nap around ${fmtTime(want)} on ${dayName(d)}s (${Math.round(nap.confidence * 100)}% confident)` });
+        break;
+      }
+    }
   }
 
   // 4. Routines.
@@ -88,6 +102,9 @@ export function plan(input: PlanInput): PlanResult {
     if (b) push(b);
     else if (r.flexibility !== 'optional') warnings.push(`Couldn't fit ${r.title} on ${dayName(d)}.`);
   }
+
+  // 4c. Gap snacks go in after holds and routines so they work around them.
+  for (const d of days) added.push(...detectMealGaps(d, settings, tl, wakeOf(d), bedOf(d), rangeStart));
 
   const ctx: Ctx = { now, rangeStart, rangeEnd, tl, settings, W, energy, places, travel, wakeOf, bedOf, currentPlaceId: input.currentPlaceId, debug };
 
@@ -156,7 +173,7 @@ function placeTask(t: Task, c: Ctx, push: (b: Block) => void, unplaced: Unplaced
   for (let i = 0; i < chunks.length; i++) {
     const dur = chunks[i];
     // chunks of the same task go in order, with a break between them
-    const from = i === 0 ? c.rangeStart : lastEnd + c.settings.breakMin * MIN;
+    const from = Math.max(i === 0 ? c.rangeStart : lastEnd + c.settings.breakMin * MIN, t.notBefore ?? 0);
     const best = bestSlot(t, dur, from, windowEnd, c, urgent);
     if (!best) {
       const longest = Math.max(0, ...c.tl.free({ start: c.rangeStart, end: windowEnd }, c.settings.bufferMin).map(f => (f.end - f.start) / MIN));
@@ -217,7 +234,7 @@ function bestSlot(t: Task, durMin: number, from: Ms, to: Ms, c: Ctx, urgent: boo
   for (const s of starts) {
     const e = s + durMin * MIN;
     const day = startOfDay(s);
-    if (s < c.wakeOf(day) || e > c.bedOf(day)) continue; // stay in waking hours
+    if (s < c.wakeOf(day) + 45 * MIN || e > c.bedOf(day)) continue; // waking hours, with time to get ready
     const prev = c.tl.prevBlock(s);
     const next = c.tl.nextBlock(e);
     // travel feasibility

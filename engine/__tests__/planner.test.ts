@@ -158,4 +158,27 @@ describe('planner', () => {
     expect(r.warnings.some(w => /past due/.test(w))).toBe(true);
     void at;
   });
+
+  it('respects notBefore (staged work) and leaves time to get ready after waking', () => {
+    const r = planWeek(base({ tasks: [task('stage2', { durationMin: 30, notBefore: T(2, '00:00'), due: T(4, '20:00') })] }) as any);
+    const b = r.added.find(x => x.taskId === 'stage2')!;
+    expect(b.start).toBeGreaterThanOrEqual(T(2, '07:45'));
+  });
+
+  it('a dinner event counts as dinner; passed meal windows are assumed eaten', () => {
+    const dinner = fixed('Dinner with Jake', T(0, '19:00'), T(0, '20:30'), { kind: 'event', mealType: 'dinner' });
+    const r = planDay(base({ blocks: [...schoolDay(0), dinner], now: T(0, '15:20') }) as any);
+    expect(r.added.some(b => b.mealType === 'dinner')).toBe(false);
+    for (const s of r.added.filter(b => b.mealType === 'snack')) expect(s.title).not.toMatch(/Classes/);
+  });
+});
+
+describe('learned holds', () => {
+  it('holds the usual nap slot on the learned weekdays', () => {
+    const habits = [{ id: 'hobby:nap', key: 'hobby:nap', label: 'Nap', weekdays: [1], windowStart: 15 * 60 + 30, windowEnd: 16 * 60 + 30, durationMin: 25, confidence: 0.8, samples: 8, status: 'learned' as const }];
+    const r = planDay(base({ habits, now: T(0, '07:00') }) as any);
+    const nap = r.added.find(b => b.kind === 'nap')!;
+    expect(nap.start).toBe(T(0, '15:30'));
+    expect(nap.reason).toMatch(/usually nap/);
+  });
 });

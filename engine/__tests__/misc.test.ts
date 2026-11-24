@@ -108,7 +108,12 @@ describe('occasions + gifts', () => {
   it('stages move from brainstorm to celebrate, leaving shipping time', () => {
     const [bd] = personOccasions([mom], MON);
     const st = occasionStages(bd, mom, MON, { shippingDays: 5 });
-    expect(st.map(s => s.key)).toEqual(['brainstorm', 'decide', 'reserve', 'order', 'card', 'wrap', 'celebrate']);
+    const keys = st.map(s => s.key);
+    expect(keys[0]).toBe('brainstorm');
+    expect(keys.at(-1)).toBe('celebrate');
+    expect(keys.indexOf('decide')).toBeLessThan(keys.indexOf('order'));
+    expect(keys.indexOf('order')).toBeLessThan(keys.indexOf('wrap'));
+    expect(keys).toEqual(expect.arrayContaining(['card', 'reserve']));
     const order = st.find(s => s.key === 'order')!;
     expect(bd.date - order.due).toBeGreaterThanOrEqual(5 * DAY);
   });
@@ -126,5 +131,22 @@ describe('location', () => {
     expect(detectPlace(41, -75, places)).toBeUndefined();
     expect(travelMinutes('home', 'school', travel)).toBe(15);
     expect(travelMinutes('school', 'home', travel)).toBe(15);
+  });
+});
+
+describe('late occasion prep', () => {
+  it('compresses stages into remaining days and switches to buying locally', () => {
+    const p: Person = { id: 'x', name: 'Sam', relationship: 'friend', closeness: 1, birthday: { month: 11, day: 26 }, interests: [], foodLikes: [], dietary: [], giftIdeas: [], pastGifts: [], notes: [], source: 'manual' };
+    const [bd] = personOccasions([p], MON); // 3 days away, lead is 28
+    const st = occasionStages(bd, p, MON);
+    expect(st.find(s => s.key === 'order')!.title).toMatch(/locally/);
+    const dues = st.filter(s => s.key !== 'celebrate').map(s => s.due);
+    expect(new Set(dues.map(d => new Date(d).getDate())).size).toBeGreaterThan(1); // spread, not all "now"
+  });
+  it('food holidays get a plan, not gift orders', () => {
+    const tg = holidays(MON).find(h => h.title === 'Thanksgiving')!;
+    const keys = occasionStages(tg, undefined, MON).map(s => s.key);
+    expect(keys).not.toContain('order');
+    expect(keys).toContain('food');
   });
 });

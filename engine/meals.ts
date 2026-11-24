@@ -1,6 +1,6 @@
 import type { Block, Settings, Ms, MealSlot, FoodProfile, MealType, ID, Place, TravelTime, Task } from './types';
 import { Timeline, candidateStarts } from './timeline';
-import { at, parseHM, MIN, fmtTime, hashId, startOfDay, addDays, fmtDur } from './time';
+import { at, parseHM, MIN, HOUR, fmtTime, hashId, startOfDay, addDays, fmtDur } from './time';
 import { travelMinutes } from './location';
 
 // ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@ export function placeMealsForDay(day: Ms, settings: Settings, tl: Timeline, now:
   const blocks: Block[] = [], warnings: string[] = [];
   const d0 = startOfDay(day);
   for (const slot of settings.meals) {
-    const existing = tl.blocks.find(b => b.kind === 'meal' && b.mealType === slot.type && startOfDay(b.start) === d0);
+    const existing = tl.blocks.find(b => b.mealType === slot.type && b.status !== 'skipped' && startOfDay(b.start) === d0);
     if (existing) continue;
     const ws = at(d0, slot.window[0]), we = at(d0, slot.window[1]);
     if (we <= now) continue; // window already passed
@@ -63,8 +63,14 @@ function placeMeal(slot: MealSlot, d0: Ms, ws: Ms, we: Ms, tl: Timeline, earlies
  */
 export function detectMealGaps(day: Ms, settings: Settings, tl: Timeline, wake: Ms, bed: Ms, now: Ms): Block[] {
   const d0 = startOfDay(day);
-  const meals = tl.blocks.filter(b => b.kind === 'meal' && b.start >= wake && b.start < bed).sort((a, b) => a.start - b.start);
-  const points: { t: Ms; end: Ms }[] = [{ t: wake, end: wake }, ...meals.map(m => ({ t: m.start, end: m.end })), { t: bed, end: bed }];
+  const meals = tl.blocks.filter(b => b.mealType && b.status !== 'skipped' && b.start >= wake && b.start < bed).map(m => ({ t: m.start, end: m.end }));
+  // Meal windows that already passed today (with no block) are assumed eaten.
+  for (const slot of settings.meals) {
+    const ws = at(d0, slot.window[0]), we = at(d0, slot.window[1]);
+    if (we <= now && !meals.some(m => m.t >= ws - HOUR && m.t <= we + HOUR)) { const mid = ws + (we - ws) / 2; meals.push({ t: mid, end: mid + slot.durationMin * MIN }); }
+  }
+  meals.sort((a, b) => a.t - b.t);
+  const points: { t: Ms; end: Ms }[] = [{ t: wake, end: wake }, ...meals, { t: bed, end: bed }];
   const out: Block[] = [];
   const maxGap = settings.maxMealGapMin * MIN;
   for (let i = 0; i < points.length - 1; i++) {
@@ -73,7 +79,7 @@ export function detectMealGaps(day: Ms, settings: Settings, tl: Timeline, wake: 
     if (i === points.length - 2 && b === bed && b - a <= maxGap + 2 * 3_600_000) continue; // a late evening without food is fine
     if (b < now) continue;
     // Prefer just before the longest fixed block inside the gap (e.g. practice).
-    const inside = tl.blocks.filter(x => x.flexibility === 'fixed' && x.kind !== 'sleep' && x.start > a && x.start < b)
+    const inside = tl.blocks.filter(x => x.flexibility === 'fixed' && x.kind !== 'sleep' && x.start > Math.max(a, now + 30 * MIN) && x.start < b)
       .sort((x, y) => (y.end - y.start) - (x.end - x.start) || x.start - y.start);
     const anchor = inside[0];
     const target = anchor && anchor.end - anchor.start >= 60 * MIN ? anchor.start - 20 * MIN : a + maxGap * 0.6;
