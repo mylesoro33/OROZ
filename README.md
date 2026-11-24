@@ -1,69 +1,37 @@
 # OROZ
 
-A calm personal planner for students. It starts empty and builds up with you: your classes, to-dos, sleep and the people you care about.
+A calendar-first life planner for anyone: students, workers, parents, retirees. It starts empty and builds up as you tell it about your week.
 
-Four tabs:
-- **Schedule:** day and week timeline, with a short outlook for each day
-- **To-Do:** today, upcoming and done
-- **OROZ:** chat with the assistant
-- **Settings:** connections, About me, preferences
+**Live:** https://mylesoro33.github.io/OROZ/. To install it, use Safari → Share → Add to Home Screen on iPhone, or Chrome → Install app on Android.
 
-It's a mobile-first PWA (TypeScript, React, Vite, Tailwind, Dexie). Your data stays on your device.
+## How it works
+- **Schedule** (home screen): a day/week timeline with a short summary at the top. Meals and sleep appear as soft bands you can drag. Errand hints show up by place, and the weather is one line.
+- **To-Do:** grouped as Today, This week and Whenever. Items without a time get a **Fit in** button that suggests open slots.
+- **Profile:** about you, your places, food and bedtime (a draggable dial with a weeknight and weekend default, and any night can differ), people, things you've told OROZ, and important dates.
+- **Settings** (the gear): connections, your Claude key, theme, and data export or deletion.
+- **Tell OROZ** (the big button): say or type things like "Pick up Jake at 4:30 Thursday" or "I work Monday to Thursday 8 to 4", snap a photo of a schedule, or paste a link. You always see a draft before anything is added.
 
 ## Run it
-
 ```bash
 npm install
 npm run dev      # http://localhost:5173
 npm test         # engine tests
-npm run build    # production build with offline service worker
+npm run build
 ```
 
-**Live:** https://mylesoro33.github.io/OROZ/. Install it on iPhone with Safari → Share → Add to Home Screen, or on Android with Chrome → Install app.
-
-## First launch
-
-OROZ asks five quick questions, and you can skip any of them:
-1. your name
-2. your school and grade
-3. your usual school-night bedtime, set on a sleep dial
-4. whether to connect accounts
-5. who you want to celebrate
-
-After that, it asks one small thing at a time when something is missing ("I don't have your Tuesday schedule yet").
-
-## Chat (OROZ tab)
-
-- **Without a key:** chat answers schedule, task, bedtime and birthday questions offline.
-- **With your own Claude API key** (Settings → Preferences): you can talk naturally, and OROZ can search the web and read public pages, for example your school's calendar or this week's lunch menu.
-  - Each answer shows the sources it used.
-  - Anything found online is shown for your approval before it's saved.
-  - Web search must be enabled for your key in the Claude Console.
-- **What's sent:** your messages and the specific schedule details the assistant looks up to answer. Nothing else.
-
-## Connections (Settings → Connections)
-
-All connections are read-only and optional, and you review every item before it's added. Turning a connection off removes what it brought in.
-
-| Service | How |
+## What needs what
+| Feature | Needs |
 |---|---|
-| Google Calendar, Classroom, Contacts, Tasks ("Reminders") | Google sign-in. Needs a Google OAuth client ID (below). |
-| Schoology | Paste your calendar feed link (Calendar → Export), or import the .ics file |
-| School calendar | Paste an iCal link, import a file, or ask OROZ to search the school's website |
+| Typing or speaking events, to-dos and weekly hours; Fit in; Schedule; Profile | Nothing. Works offline. |
+| Calendar links (.ics, Google public calendars, Outlook or Apple published links, Schoology, Canvas, Blackboard, PowerSchool feeds) | Nothing. Some sites block apps from reading links directly. |
+| Google Calendar, Classroom, Tasks, Contacts | A Google OAuth client ID (Settings → Preferences). Enable those four APIs in Google Cloud and add your site as an authorized JavaScript origin. |
+| Understanding anything you say, reading photos and web pages, looking up important dates | Your Claude API key (Settings → Preferences). Turn on web search for the key in the Claude Console. |
+| Weather | Nothing (Open-Meteo, looked up by your city name). |
 
-**Google client ID setup:**
-1. In Google Cloud Console, enable these APIs: Calendar, People, Classroom and Tasks.
-2. Set up the OAuth consent screen (External) and add yourself as a test user.
-3. Create an OAuth client ID of type "Web application". Add your site, e.g. `https://mylesoro33.github.io` and `http://localhost:5173`, as authorized JavaScript origins.
-4. Paste the client ID in Settings → Preferences, or put it in `.env.local` as `VITE_GOOGLE_CLIENT_ID=`.
-
-**Limits of a web app:**
-- Apple Reminders and iPhone Contacts can't be read; they need a native app.
-- Text messages can't be read. "Who you see most" comes from your calendar events.
-- Some school sites block apps from reading their calendar links. Import the downloaded file instead.
+**Not possible in a web app:** Apple Reminders. It's listed in Connections as needing the iPhone app.
 
 ## Privacy
-
-- Everything is stored in your browser on this device.
-- Export or delete it all from Settings.
-- Only public pages you point to, or accounts you sign in to, are ever read.
+- Everything is stored on your device.
+- Claude only receives what you tell OROZ, and the calendar details it looks up to answer you.
+- Important dates come with a source link and are only added after you approve them.
+- Export or delete everything from Settings.

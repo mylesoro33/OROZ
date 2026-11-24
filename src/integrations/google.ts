@@ -99,7 +99,7 @@ export async function pullClassroom(tok: string): Promise<Task[]> {
       const { year, month, day } = w.dueDate;
       const due = Date.UTC(year, month - 1, day, w.dueTime?.hours ?? 23, w.dueTime?.minutes ?? 59);
       if (due < Date.now() - 86_400_000) continue;
-      out.push({ id: `classroom_${w.id}`, externalId: w.id, title: w.title, due, tag: c.name, type: 'school', done: false, source: 'classroom', createdAt: Date.now() });
+      out.push({ id: `classroom_${w.id}`, externalId: w.id, title: `${w.title} (${c.name})`, type: 'school', date: new Date(due).setHours(0, 0, 0, 0), by: due, durationMin: 45, done: false, source: 'classroom', createdAt: Date.now() });
     }
   }
   return out;
@@ -110,7 +110,7 @@ export async function pullGoogleTasks(tok: string): Promise<Task[]> {
   const out: Task[] = [];
   for (const l of lists.items ?? []) {
     const data = await g<{ items?: any[] }>(`https://tasks.googleapis.com/tasks/v1/lists/${l.id}/tasks?showCompleted=false&maxResults=100`, tok);
-    for (const t of data.items ?? []) if (t.title?.trim()) out.push({ id: `gtasks_${t.id}`, externalId: t.id, title: t.title, due: t.due ? Date.parse(t.due) + 17 * 3_600_000 : undefined, tag: l.title === 'My Tasks' ? undefined : l.title, type: 'personal', done: false, source: 'google-tasks', createdAt: Date.now() });
+    for (const t of data.items ?? []) if (t.title?.trim()) { const due = t.due ? new Date(t.due.slice(0, 10) + 'T00:00').getTime() : undefined; out.push({ id: `gtasks_${t.id}`, externalId: t.id, title: t.title, type: 'errand', date: due, durationMin: 30, done: false, source: 'google-tasks', createdAt: Date.now() }); }
   }
   return out;
 }

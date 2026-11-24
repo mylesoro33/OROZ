@@ -1,50 +1,49 @@
 import { useSyncExternalStore, useRef } from 'react';
-import type { Block, Task, Person, Memory, Settings, Profile } from '@engine/types';
+import type { Block, Task, Person, Place, Memory, Settings, Profile } from '@engine/types';
 import { History } from '@engine/history';
 import { defaultSettings } from '@engine/defaults';
 import { uid } from '@engine/time';
 import type { Repository, TableName } from './repository';
 
-export type ConnectionId = 'google-calendar' | 'classroom' | 'schoology' | 'google-tasks' | 'school-calendar' | 'contacts';
-export interface Connection { connected: boolean; at?: number; detail?: string; url?: string }
+export type ConnectionId =
+  | 'google-calendar' | 'apple-calendar' | 'outlook' | 'google-tasks' | 'apple-reminders'
+  | 'classroom' | 'schoology' | 'canvas' | 'blackboard' | 'powerschool' | 'teams' | 'contacts';
+export interface Connection { connected: boolean; at?: number; url?: string }
 
-export interface ChatMsg {
-  id: string; at: number; role: 'user' | 'assistant';
-  text: string;
-  sources?: string[];            // "Schedule", "Google Calendar", "lincolnhigh.org"
-  pending?: PendingImport;       // something waiting for "Add"
-}
-
-/** Anything coming in from outside waits here until the user approves it. */
-export interface PendingImport {
+/** Anything from outside waits here until the person approves it. */
+export interface Draft {
   id: string;
-  title: string;                 // "12 dates from Lincoln High's calendar"
-  source: Block['source'];
+  title: string;
+  events: Block[];
+  tasks: Task[];
+  people: Person[];
+  dates: Block[];               // important dates (with sourceUrl)
   connection?: ConnectionId;
-  blocks?: Block[];
-  tasks?: Task[];
-  people?: Person[];
-  lunch?: Record<string, string[]>;
-  status: 'pending' | 'added' | 'dismissed';
+  sources?: string[];
+  note?: string;
 }
+export const emptyDraft = (title: string, extra: Partial<Draft> = {}): Draft => ({ id: uid('draft'), title, events: [], tasks: [], people: [], dates: [], ...extra });
+export const draftSize = (d: Draft) => d.events.length + d.tasks.length + d.people.length + d.dates.length;
+
+export interface WeatherDay { date: string; tmax: number; tmin: number; precip: number; code: number }
 
 export interface AppData {
-  blocks: Block[]; tasks: Task[]; people: Person[]; memory: Memory[]; chat: ChatMsg[];
+  blocks: Block[]; tasks: Task[]; people: Person[]; places: Place[]; memory: Memory[];
   settings: Settings; profile: Profile;
   connections: Partial<Record<ConnectionId, Connection>>;
-  lunchMenus: Record<string, string[]>;
   dismissed: string[];
   attendees: Record<string, number>;
-  bedtimeSet: boolean;
+  weather: { city: string; at: number; unit: 'F' | 'C'; days: WeatherDay[] } | null;
+  foundDates: boolean;
   ready: boolean;
 }
 type Tables = Pick<AppData, TableName>;
-const KV = ['settings', 'profile', 'connections', 'lunchMenus', 'dismissed', 'attendees', 'bedtimeSet'] as const;
+const KV = ['settings', 'profile', 'connections', 'dismissed', 'attendees', 'weather', 'foundDates'] as const;
 
 export class Store {
   state: AppData = {
-    blocks: [], tasks: [], people: [], memory: [], chat: [],
-    settings: defaultSettings(), profile: { setupDone: false }, connections: {}, lunchMenus: {}, dismissed: [], attendees: {}, bedtimeSet: false, ready: false,
+    blocks: [], tasks: [], people: [], places: [], memory: [], settings: defaultSettings(), profile: { setupDone: false },
+    connections: {}, dismissed: [], attendees: {}, weather: null, foundDates: false, ready: false,
   };
   private listeners = new Set<() => void>();
   history = new History<Pick<AppData, 'blocks' | 'tasks'>>(60);
@@ -54,26 +53,23 @@ export class Store {
 
   async load() {
     const next = { ...this.state };
-    for (const t of ['blocks', 'tasks', 'people', 'memory', 'chat'] as TableName[]) (next as any)[t] = await this.repo.all(t);
-    next.chat.sort((a, b) => a.at - b.at);
+    for (const t of ['blocks', 'tasks', 'people', 'places', 'memory'] as TableName[]) (next as any)[t] = await this.repo.all(t);
     for (const k of KV) { const v = await this.repo.getKV(k); if (v !== undefined) (next as any)[k] = v; }
     const d = defaultSettings();
     next.settings = { ...d, ...next.settings, sleep: { ...d.sleep, ...next.settings.sleep } };
     next.ready = true; this.state = next; this.emit();
   }
 
-  /** Snapshot blocks+tasks before a change so it can be undone. */
   checkpoint() { this.history.push({ blocks: this.state.blocks, tasks: this.state.tasks }); }
   undo() {
     const p = this.history.undo({ blocks: this.state.blocks, tasks: this.state.tasks });
     if (!p) return false;
-    this.replace('blocks', p.blocks); this.replace('tasks', p.tasks); return true;
-  }
-  private replace<K extends 'blocks' | 'tasks'>(table: K, rows: AppData[K]) {
-    const keep = new Set(rows.map(r => r.id));
-    const gone = this.state[table].filter(r => !keep.has(r.id)).map(r => r.id);
-    this.state = { ...this.state, [table]: rows }; this.emit();
-    void this.repo.bulkDelete(table, gone); void this.repo.bulkPut(table, rows as { id: string }[]);
+    for (const t of ['blocks', 'tasks'] as const) {
+      const keep = new Set(p[t].map(r => r.id));
+      void this.repo.bulkDelete(t, this.state[t].filter(r => !keep.has(r.id)).map(r => r.id));
+      void this.repo.bulkPut(t, p[t] as { id: string }[]);
+    }
+    this.state = { ...this.state, blocks: p.blocks, tasks: p.tasks }; this.emit(); return true;
   }
 
   upsert<K extends TableName>(table: K, items: Tables[K]) {
@@ -93,7 +89,21 @@ export class Store {
     this.state = { ...this.state, [key]: value }; this.emit();
     void this.repo.setKV(key, value);
   }
-  remember(text: string) { this.upsert('memory', [{ id: uid('mem'), text, at: Date.now() }]); }
+  remember(text: string, topic?: string) { this.upsert('memory', [{ id: uid('mem'), text, at: Date.now(), topic }]); }
+  dismiss(id: string) { if (!this.state.dismissed.includes(id)) this.set('dismissed', [...this.state.dismissed, id]); }
+
+  /** Save the approved parts of a draft. */
+  approve(d: Draft, keep?: Set<string>) {
+    const pick = <T extends { id: string }>(xs: T[]) => xs.filter(x => !keep || keep.has(x.id));
+    this.checkpoint();
+    this.upsert('blocks', [...pick(d.events), ...pick(d.dates)]);
+    const done = new Set(this.state.tasks.filter(t => t.done).map(t => t.id));
+    this.upsert('tasks', pick(d.tasks).filter(t => !done.has(t.id)));
+    const known = new Set(this.state.people.map(p => p.name.toLowerCase()));
+    this.upsert('people', pick(d.people).filter(p => !known.has(p.name.toLowerCase())));
+    if (d.dates.length) this.set('foundDates', true);
+    if (d.connection) this.set('connections', { ...this.state.connections, [d.connection]: { ...this.state.connections[d.connection], connected: true, at: Date.now() } });
+  }
 
   async exportJSON() { return JSON.stringify(await this.repo.exportAll(), null, 2); }
   async wipe() { await this.repo.wipe(); location.reload(); }

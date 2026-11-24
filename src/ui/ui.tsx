@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  GraduationCap, Briefcase, User, ShoppingBag, CalendarDays, BookOpen, ListChecks, School, Users,
-  Utensils, ClipboardCheck, Backpack, Moon, Cake, Sun, type LucideIcon,
-} from 'lucide-react';
+import { ShoppingBag, Phone, Home, Briefcase, GraduationCap, HeartPulse, Users, type LucideIcon } from 'lucide-react';
 import type { Block, TaskType } from '@engine/types';
-import type { OutlookIcon } from '@engine/day';
 import type { ConnectionId } from '../data/store';
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
@@ -53,20 +49,28 @@ export function Field({ label, children }: { label: string; children: React.Reac
 }
 export const inputCls = 'w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-green';
 
-export const TASK_ICON: Record<TaskType, LucideIcon> = { school: GraduationCap, work: Briefcase, personal: User, errand: ShoppingBag, event: CalendarDays };
-export const CONN_ICON: Record<ConnectionId, LucideIcon> = { 'google-calendar': CalendarDays, classroom: GraduationCap, schoology: BookOpen, 'google-tasks': ListChecks, 'school-calendar': School, contacts: Users };
-export const OUTLOOK_ICON: Record<OutlookIcon, LucideIcon> = { school: GraduationCap, event: CalendarDays, lunch: Utensils, due: ClipboardCheck, prep: Backpack, moon: Moon, cake: Cake, off: Sun };
+export const TASK_ICON: Record<TaskType, LucideIcon> = { errand: ShoppingBag, call: Phone, home: Home, work: Briefcase, school: GraduationCap, health: HeartPulse, social: Users };
+
+/** Small monogram badges for connections (no third-party logos bundled). */
+const MONO: Record<ConnectionId, [string, string]> = {
+  'google-calendar': ['G', '#3b6e57'], 'apple-calendar': ['A', '#5b5650'], outlook: ['O', '#3d5a7a'], 'google-tasks': ['T', '#3b6e57'], 'apple-reminders': ['R', '#8a6d3b'],
+  classroom: ['C', '#4b7a45'], schoology: ['S', '#2f5f80'], canvas: ['Cv', '#9a4a32'], blackboard: ['Bb', '#2b2a27'], powerschool: ['P', '#3b5b8c'], teams: ['Tm', '#4e4f8a'], contacts: ['@', '#6d6152'],
+};
+export function Monogram({ id, size = 36 }: { id: ConnectionId; size?: number }) {
+  const [t, c] = MONO[id];
+  return <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded-lg font-semibold text-white" style={{ width: size, height: size, background: c, fontSize: size * 0.36 }}>{t}</span>;
+}
 
 export function blockStyle(b: Block): string {
   switch (b.kind) {
     case 'class': return 'bg-green-soft border-l-green text-ink';
-    case 'study': return 'bg-clay-soft border-l-clay text-ink';
-    case 'meal': return 'bg-brass-soft/70 border-l-brass text-muted';
-    case 'sleep': return 'hatch bg-linen border-l-line text-muted';
-    default: return 'bg-linen border-l-ink/60 text-ink';
+    case 'work': return 'bg-linen border-l-ink/70 text-ink';
+    case 'todo': return 'bg-clay-soft border-l-clay text-ink';
+    case 'date': return 'bg-brass-soft border-l-brass text-ink';
+    default: return 'bg-card border-l-green/70 text-ink border border-line';
   }
 }
-export const isOwn = (b: Block) => !b.derived && (b.source === 'manual' || b.source === 'chat');
+export const isOwn = (b: Block) => b.source === 'manual' || b.source === 'talk';
 
 export function useNow(ms = 30_000) {
   const [n, setN] = useState(Date.now());

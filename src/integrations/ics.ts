@@ -11,7 +11,7 @@ export async function fetchIcsText(url: string, corsProxy?: string): Promise<str
   };
   try { return await attempt(u); }
   catch (e) {
-    if (!corsProxy) throw new Error(`That site blocks apps from reading the link directly. Download the .ics file and choose "Import file" instead.`);
+    if (!corsProxy) throw new Error(`That site blocks apps from reading the link directly. Try the calendar's "public" or "subscribe" link, or take a photo of it instead.`);
     return attempt(corsProxy.includes('{url}') ? corsProxy.replace('{url}', encodeURIComponent(u)) : corsProxy + encodeURIComponent(u));
   }
 }

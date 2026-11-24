@@ -33,7 +33,7 @@ describe('Tell OROZ (offline)', () => {
   it('"Fit in a haircut sometime this week" → flexible, fit in by Sunday', () => {
     const d = talkToDraft('Fit in a haircut sometime this week', now, places);
     expect(d.fitIn).toBe(true);
-    expect(d.task!.title).toBe('A haircut');
+    expect(d.task!.title).toBe('Haircut');
     expect(d.task!.by).toBe(addDays(MON, 6));
   });
   it('types', () => {
@@ -111,5 +111,28 @@ describe('links, weather, nudges, dates', () => {
     const bl = icsToBlocks('BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:1\nSUMMARY:Morning shift\nDTSTART:20261123T080000\nDTEND:20261123T160000\nEND:VEVENT\nEND:VCALENDAR', MON, MON + 7 * DAY);
     expect(bl[0].kind).toBe('work');
     expect(upcomingBirthdays([person('Mom', { birthday: { month: 12, day: 1 } })], MON)[0].inDays).toBe(8);
+  });
+});
+
+describe('weekly schedules said out loud', () => {
+  it('"I work Monday to Thursday 8 to 4"', () => {
+    const d = talkToDraft('I work Monday to Thursday 8 to 4', now, []);
+    expect(d.line).toBe('Work, Mon–Thu 8am–4pm, every week.');
+    const first = d.events!.slice(0, 4).map(e => [new Date(e.start).getDay(), new Date(e.start).getHours(), new Date(e.end).getHours()]);
+    expect(first).toEqual([[2, 8, 16], [3, 8, 16], [4, 8, 16], [1, 8, 16]]);
+    expect(d.events!.every(e => e.kind === 'work')).toBe(true);
+  });
+  it('"Practice every Tuesday at 6"', () => {
+    const d = talkToDraft('Practice every Tuesday at 6', now, []);
+    expect(d.line).toBe('Practice, Tue 6pm–7:30pm, every week.');
+    expect(d.events![0].start).toBe(T(1, '18:00'));
+  });
+  it('"I have class Mondays and Wednesdays 9:30 to 10:45"', () => {
+    expect(talkToDraft('I have class Mondays and Wednesdays 9:30 to 10:45', now, []).line).toBe('Class, Mon, Wed 9:30am–10:45am, every week.');
+  });
+  it('one-offs stay one-offs, and workouts are events', () => {
+    expect(talkToDraft('Workout at the gym Wednesday 5pm', now, places).kind).toBe('event');
+    expect(talkToDraft('Fit in a haircut sometime this week', now, places).task!.title).toBe('Haircut');
+    expect(talkToDraft('Gotta pick up Jake at 4:30 Thursday', now, places).task!.durationMin).toBe(30);
   });
 });
