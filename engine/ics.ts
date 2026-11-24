@@ -1,4 +1,4 @@
-import type { Block, Ms } from './types';
+import type { Block, Ms, Source } from './types';
 import { DAY, MIN, hashId } from './time';
 
 // Minimal RFC 5545 parser: VEVENT with DTSTART/DTEND/DURATION/SUMMARY/UID/LOCATION/DESCRIPTION,
@@ -97,13 +97,14 @@ export function expand(ev: IcsEvent, from: Ms, to: Ms): IcsEvent[] {
 }
 
 /** Calendar events → fixed blocks (imported events can never be moved by the planner). */
-export function icsToBlocks(text: string, from: Ms, to: Ms, source: 'ics' | 'google' | 'school' = 'ics'): Block[] {
+export function icsToBlocks(text: string, from: Ms, to: Ms, source: Source = 'school-calendar'): Block[] {
   const blocks: Block[] = [];
   for (const ev of parseIcs(text)) for (const o of expand(ev, from, to)) {
-    if (o.allDay) continue; // all-day items (holidays, due dates) are not time blocks
+    const noSchool = /no school|holiday|break|teacher (work|in-?service)|day off/i.test(o.summary);
     blocks.push({
-      id: `${source}_${hashId(o.uid)}`, externalId: o.uid, title: o.summary, kind: /class|period|lecture|lab|school/i.test(o.summary + (o.categories ?? '')) ? 'class' : 'event',
-      start: o.start, end: o.end, flexibility: 'fixed', source, notes: o.location,
+      id: `${source}_${hashId(o.uid)}`, externalId: o.uid, title: o.summary,
+      kind: noSchool ? 'no-school' : /class|period|lecture|lab\b/i.test(o.summary + (o.categories ?? '')) ? 'class' : 'event',
+      start: o.start, end: o.end, fixed: true, source, location: o.location, allDay: o.allDay || undefined,
     });
   }
   return blocks;

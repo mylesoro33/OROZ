@@ -1,63 +1,49 @@
-import type { Block, Settings, Ms } from './types';
-import { at, addDays, parseHM, MIN, overlaps, fmtTime, hashId, startOfDay } from './time';
+import type { Block, SleepPrefs, Ms } from './types';
+import { at, addDays, parseHM, MIN, overlaps, fmtTime, hashId, startOfDay, isoDay } from './time';
 
-export interface SleepResult { block: Block; warning?: string }
-
-/**
- * Protected sleep for the night that starts on `day`.
- * Hard fixed events win: a late event pushes bedtime later (with a 15 min wind-down);
- * an early event pulls wake earlier. If that leaves less than minSleep, we try to
- * extend wake later (when the morning is free) and otherwise warn.
- */
-export function sleepForNight(day: Ms, settings: Settings, fixed: Block[]): SleepResult {
-  const bedMin = parseHM(settings.bedtime);
-  const wakeMin = parseHM(settings.wake);
-  // bedtime before noon means "after midnight"
-  const bed0 = bedMin < 12 * 60 ? at(addDays(day, 1), bedMin) : at(day, bedMin);
-  const wake0 = at(addDays(day, 1), wakeMin);
-  let bed = bed0, wake = wake0;
-  const night = { start: at(day, 18 * 60), end: at(addDays(day, 1), 12 * 60) };
-  const hard = fixed
-    .filter(b => b.kind !== 'sleep' && b.flexibility === 'fixed' && overlaps(b, night))
-    .sort((a, b) => a.start - b.start);
-
-  const reasons: string[] = [];
-  for (const ev of hard) {
-    if (!overlaps(ev, { start: bed, end: wake + 30 * MIN })) continue; // need 30 min to get ready
-    const mid = bed + (wake - bed) / 2;
-    if (ev.start < mid) { // evening event running late
-      bed = Math.max(bed, ev.end + 15 * MIN);
-      reasons.push(`${ev.title} ends ${fmtTime(ev.end)}`);
-    } else { // early-morning event
-      wake = Math.min(wake, ev.start - 30 * MIN);
-      reasons.push(`${ev.title} at ${fmtTime(ev.start)}`);
-    }
-  }
-
-  let warning: string | undefined;
-  const minSleep = settings.minSleepMin * MIN;
-  if (wake - bed < minSleep) {
-    // try sleeping in, up to the next hard event (minus 30 min to get ready)
-    const nextMorning = hard.find(ev => ev.start >= wake);
-    const latestWake = nextMorning ? nextMorning.start - 30 * MIN : at(addDays(day, 1), 12 * 60);
-    const wanted = bed + minSleep;
-    const newWake = Math.min(wanted, latestWake);
-    if (newWake > wake) { wake = newWake; reasons.push('sleeping in to protect rest'); }
-    if (wake - bed < minSleep) {
-      const h = ((wake - bed) / 3_600_000).toFixed(1);
-      warning = `Only ${h}h of sleep possible on the night of ${new Date(day).toDateString()} (${reasons.join(', ')}).`;
-    }
-  }
-
-  const block: Block = {
-    id: `sleep_${hashId(String(startOfDay(day)))}`,
-    title: 'Sleep',
-    kind: 'sleep',
-    start: bed,
-    end: Math.max(wake, bed + 60 * MIN),
-    flexibility: 'fixed',
-    source: 'planner',
-    reason: reasons.length ? `Protected sleep, adjusted: ${reasons.join('; ')}` : 'Protected sleep',
-  };
-  return { block, warning };
+export interface Night {
+  day: Ms;                   // the evening this night starts on
+  bedtime: Ms;               // planned bedtime (override or the night's default)
+  range: [Ms, Ms];           // typical range around it
+  wake: Ms;
+  schoolNight: boolean;
+  overridden: boolean;
+  block: Block;              // protected sleep (derived)
+  windDownBy: Ms;            // homework should wrap by
+  warning?: string;
 }
+
+/** A school night is any night before a school day. */
+export const isSchoolNight = (day: Ms, schoolDays: number[]) => schoolDays.includes(new Date(addDays(day, 1)).getDay());
+
+/** Bedtime "HH:MM" → timestamp on the night starting `day` (times before noon are after midnight). */
+export function bedtimeAt(day: Ms, hm: string): Ms {
+  const m = parseHM(hm);
+  return m < 12 * 60 ? at(addDays(day, 1), m) : at(day, m);
+}
+
+export function nightFor(day: Ms, prefs: SleepPrefs, schoolDays: number[], fixed: Block[] = []): Night {
+  const d = startOfDay(day);
+  const school = isSchoolNight(d, schoolDays);
+  const base = school ? prefs.schoolNight : prefs.weekend;
+  const ov = prefs.overrides[isoDay(d)];
+  let bed = bedtimeAt(d, ov ?? base.bedtime);
+  let wake = at(addDays(d, 1), base.wake);
+  const reasons: string[] = [];
+  const hard = fixed.filter(b => b.fixed && !b.allDay && b.kind !== 'sleep' && overlaps(b, { start: at(d, 18 * 60), end: at(addDays(d, 1), 12 * 60) }));
+  for (const ev of hard.sort((a, b) => a.start - b.start)) {
+    if (!overlaps(ev, { start: bed, end: wake + 30 * MIN })) continue;
+    if (ev.start < bed + (wake - bed) / 2) { bed = Math.max(bed, ev.end + 15 * MIN); reasons.push(`${ev.title} ends ${fmtTime(ev.end)}`); }
+    else { wake = Math.min(wake, ev.start - 30 * MIN); reasons.push(`${ev.title} at ${fmtTime(ev.start)}`); }
+  }
+  let warning: string | undefined;
+  if (wake - bed < prefs.minSleepMin * MIN) warning = `Only ${((wake - bed) / 3_600_000).toFixed(1)}h of sleep${reasons.length ? ` (${reasons.join(', ')})` : ''}.`;
+  const flex = base.flexMin * MIN;
+  return {
+    day: d, bedtime: bed, range: [bed - flex, bed + flex], wake, schoolNight: school, overridden: ov !== undefined,
+    windDownBy: bed - prefs.windDownMin * MIN, warning,
+    block: { id: `sleep_${hashId(String(d))}`, title: 'Sleep', kind: 'sleep', start: bed, end: Math.max(wake, bed + 60 * MIN), fixed: true, source: 'manual', derived: true, reason: reasons.length ? `Adjusted: ${reasons.join('; ')}` : undefined },
+  };
+}
+
+export const sleepHours = (bed: Ms, wake: Ms) => Math.max(0, (wake - bed) / 3_600_000);

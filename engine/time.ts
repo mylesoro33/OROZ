@@ -96,3 +96,10 @@ export function uid(prefix = 'id'): string {
   counter = (counter + 1) % 1e6;
   return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
+
+/** Local calendar day key, e.g. "2026-11-24". */
+export function isoDay(t: Ms): string {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+export function fromIsoDay(s: string): Ms { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d).getTime(); }

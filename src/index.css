@@ -1,16 +1,35 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+:root {
+  --paper: #f5f0e6; --card: #fbf8f2; --linen: #ece5d6; --line: #ddd3c1;
+  --ink: #2b2a27; --muted: #77705f; --green: #2f4a3a; --green-soft: #e3e9e1;
+  --clay: #b0603a; --clay-soft: #f2e2d7; --brass: #a08240; --brass-soft: #efe6d0;
+}
+.dark {
+  --paper: #1c1b18; --card: #24231f; --linen: #2c2a25; --line: #3a372f;
+  --ink: #ece6d9; --muted: #a39b88; --green: #8fb39a; --green-soft: #2a3a2f;
+  --clay: #d48e66; --clay-soft: #3d2c22; --brass: #c9aa6a; --brass-soft: #383122;
+}
+
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Source Serif 4 Variable", Georgia, serif;
+  --color-paper: var(--paper); --color-card: var(--card); --color-linen: var(--linen); --color-line: var(--line);
+  --color-ink: var(--ink); --color-muted: var(--muted);
+  --color-green: var(--green); --color-green-soft: var(--green-soft);
+  --color-clay: var(--clay); --color-clay-soft: var(--clay-soft);
+  --color-brass: var(--brass); --color-brass-soft: var(--brass-soft);
 }
 
 html, body, #root { height: 100%; }
-body { @apply bg-slate-50 text-slate-900 dark:bg-[#0b0b12] dark:text-slate-100 antialiased; overscroll-behavior-y: contain; -webkit-tap-highlight-color: transparent; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; overscroll-behavior-y: contain; -webkit-tap-highlight-color: transparent; }
+h1, h2, h3, .serif { font-family: var(--font-serif); letter-spacing: -0.01em; }
+.wordmark { font-family: var(--font-serif); font-weight: 600; letter-spacing: 0.18em; }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-top { padding-top: env(safe-area-inset-top); }
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { scrollbar-width: none; }
-.fixed-stripes { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.10) 0 6px, transparent 6px 12px); }
-@keyframes pop { from { transform: translateY(8px); opacity: 0 } to { transform: none; opacity: 1 } }
-.pop { animation: pop .18s ease-out; }
+.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { scrollbar-width: none; }
+.hatch { background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--line) 70%, transparent) 0 1px, transparent 1px 7px); }
+@keyframes rise { from { transform: translateY(6px); opacity: 0 } to { transform: none; opacity: 1 } }
+.rise { animation: rise .22s ease-out; }
+@media (prefers-reduced-motion: reduce) { .rise { animation: none; } }

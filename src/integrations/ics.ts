@@ -11,7 +11,7 @@ export async function fetchIcsText(url: string, corsProxy?: string): Promise<str
   };
   try { return await attempt(u); }
   catch (e) {
-    if (!corsProxy) throw new Error(`Couldn't read the feed directly (${(e as Error).message}). The school server probably blocks browser access (CORS). Download the .ics and import the file, or add a CORS proxy in Settings.`);
+    if (!corsProxy) throw new Error(`That site blocks apps from reading the link directly. Download the .ics file and choose "Import file" instead.`);
     return attempt(corsProxy.includes('{url}') ? corsProxy.replace('{url}', encodeURIComponent(u)) : corsProxy + encodeURIComponent(u));
   }
 }

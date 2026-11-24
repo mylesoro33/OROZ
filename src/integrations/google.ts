@@ -1,13 +1,13 @@
-// Google read-only integrations via Google Identity Services (browser OAuth token flow).
-// No backend needed. Scopes are requested only when the user taps "Connect".
-import type { Block, Person } from '@engine/types';
+// Google read-only access via Google Identity Services (browser token flow, no backend).
+// Each scope is requested only when you tap Connect for that service.
+import type { Block, Person, Task } from '@engine/types';
 import { hashId } from '@engine/time';
 
 export const SCOPES = {
   calendar: 'https://www.googleapis.com/auth/calendar.readonly',
   contacts: 'https://www.googleapis.com/auth/contacts.readonly',
-  classroomCourses: 'https://www.googleapis.com/auth/classroom.courses.readonly',
-  classroomWork: 'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
+  classroom: 'https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.coursework.me.readonly',
+  tasks: 'https://www.googleapis.com/auth/tasks.readonly',
 };
 
 let token: { value: string; exp: number; scopes: string } | null = null;
@@ -17,21 +17,19 @@ function loadGis(): Promise<void> {
   return new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
-    s.onload = () => res(); s.onerror = () => rej(new Error('Could not load Google sign-in (offline?)'));
+    s.onload = () => res(); s.onerror = () => rej(new Error("Couldn't reach Google. Are you offline?"));
     document.head.appendChild(s);
   });
 }
 
-export function googleClientId(settingsId?: string): string | undefined {
-  return settingsId || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || undefined;
-}
+export const googleClientId = (fromSettings?: string) => fromSettings || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || undefined;
 
-export async function getToken(clientId: string, scopes: string[]): Promise<string> {
-  const want = scopes.join(' ');
-  if (token && token.exp > Date.now() + 60_000 && scopes.every(s => token!.scopes.includes(s))) return token.value;
+export async function getToken(clientId: string, scope: string): Promise<string> {
+  if (token && token.exp > Date.now() + 60_000 && scope.split(' ').every(s => token!.scopes.includes(s))) return token.value;
   await loadGis();
+  const want = [...new Set([...(token?.scopes.split(' ') ?? []), ...scope.split(' ')])].join(' ');
   return new Promise((resolve, reject) => {
-    const client = (window as any).google.accounts.oauth2.initTokenClient({
+    (window as any).google.accounts.oauth2.initTokenClient({
       client_id: clientId, scope: want, prompt: '',
       callback: (r: any) => {
         if (r.error) return reject(new Error(r.error_description || r.error));
@@ -39,80 +37,80 @@ export async function getToken(clientId: string, scopes: string[]): Promise<stri
         resolve(r.access_token);
       },
       error_callback: (e: any) => reject(new Error(e?.message ?? 'Google sign-in was cancelled')),
-    });
-    client.requestAccessToken();
+    }).requestAccessToken();
   });
 }
-export const hasGoogleToken = () => !!token && token.exp > Date.now();
 
-async function gfetch<T>(url: string, tok: string): Promise<T> {
+async function g<T>(url: string, tok: string): Promise<T> {
   const r = await fetch(url, { headers: { Authorization: `Bearer ${tok}` } });
-  if (!r.ok) throw new Error(`Google API ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  if (!r.ok) throw new Error(`Google said ${r.status}. ${(await r.text()).slice(0, 120)}`);
   return r.json();
 }
 
-interface GEvent { id: string; summary?: string; start: { dateTime?: string; date?: string }; end: { dateTime?: string; date?: string }; location?: string; eventType?: string; status?: string }
+export interface CalendarPull { blocks: Block[]; birthdays: Person[]; attendees: Record<string, number> }
 
-export async function fetchCalendarBlocks(tok: string, from: number, to: number): Promise<{ blocks: Block[]; birthdays: { name: string; month: number; day: number }[] }> {
-  const blocks: Block[] = []; const birthdays: { name: string; month: number; day: number }[] = [];
-  let pageToken = '';
+export async function pullCalendar(tok: string, from: number, to: number): Promise<CalendarPull> {
+  const blocks: Block[] = [], birthdays: Person[] = []; const attendees: Record<string, number> = {};
+  let page = '';
   do {
     const u = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
-    u.searchParams.set('timeMin', new Date(from).toISOString()); u.searchParams.set('timeMax', new Date(to).toISOString());
-    u.searchParams.set('singleEvents', 'true'); u.searchParams.set('orderBy', 'startTime'); u.searchParams.set('maxResults', '250');
-    if (pageToken) u.searchParams.set('pageToken', pageToken);
-    const data = await gfetch<{ items: GEvent[]; nextPageToken?: string }>(u.toString(), tok);
+    u.search = new URLSearchParams({ timeMin: new Date(from).toISOString(), timeMax: new Date(to).toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250', ...(page ? { pageToken: page } : {}) }).toString();
+    const data = await g<{ items: any[]; nextPageToken?: string }>(u.toString(), tok);
     for (const e of data.items ?? []) {
       if (e.status === 'cancelled') continue;
-      if (e.eventType === 'birthday' && e.start.date) {
+      if (e.eventType === 'birthday' && e.start?.date) {
         const [, m, d] = e.start.date.split('-').map(Number);
-        birthdays.push({ name: (e.summary ?? '').replace(/'s birthday$/i, '').trim(), month: m, day: d });
+        const name = (e.summary ?? '').replace(/'s birthday$/i, '').trim();
+        if (name && !birthdays.some(b => b.name === name)) birthdays.push({ id: `gcal_bd_${hashId(name)}`, name, birthday: { month: m, day: d }, source: 'google-calendar' });
         continue;
       }
-      if (!e.start.dateTime || !e.end.dateTime) continue; // all-day → not a time block
-      blocks.push({
-        id: `google_${hashId(e.id)}`, externalId: e.id, title: e.summary ?? '(busy)', kind: /class|period|school/i.test(e.summary ?? '') ? 'class' : 'event',
-        start: Date.parse(e.start.dateTime), end: Date.parse(e.end.dateTime), flexibility: 'fixed', source: 'google', notes: e.location,
-      });
+      for (const a of e.attendees ?? []) if (!a.self && (a.displayName || a.email)) { const n = a.displayName ?? a.email.split('@')[0]; attendees[n] = (attendees[n] ?? 0) + 1; }
+      const allDay = !e.start?.dateTime;
+      const start = allDay ? new Date(e.start.date + 'T00:00').getTime() : Date.parse(e.start.dateTime);
+      const end = allDay ? new Date(e.end.date + 'T00:00').getTime() : Date.parse(e.end.dateTime);
+      blocks.push({ id: `gcal_${hashId(e.id)}`, externalId: e.id, title: e.summary ?? 'Busy', kind: /class|period/i.test(e.summary ?? '') ? 'class' : 'event', start, end, fixed: true, source: 'google-calendar', location: e.location, allDay: allDay || undefined });
     }
-    pageToken = data.nextPageToken ?? '';
-  } while (pageToken);
-  return { blocks, birthdays };
+    page = data.nextPageToken ?? '';
+  } while (page);
+  return { blocks, birthdays, attendees };
 }
 
-export async function fetchContactBirthdays(tok: string): Promise<Partial<Person>[]> {
-  const out: Partial<Person>[] = [];
-  let pageToken = '';
+export async function pullContacts(tok: string): Promise<Person[]> {
+  const out: Person[] = []; let page = '';
   do {
-    const u = new URL('https://people.googleapis.com/v1/people/me/connections');
-    u.searchParams.set('personFields', 'names,birthdays,events'); u.searchParams.set('pageSize', '500');
-    if (pageToken) u.searchParams.set('pageToken', pageToken);
-    const data = await gfetch<{ connections?: any[]; nextPageToken?: string }>(u.toString(), tok);
+    const u = `https://people.googleapis.com/v1/people/me/connections?personFields=names,birthdays&pageSize=500${page ? `&pageToken=${page}` : ''}`;
+    const data = await g<{ connections?: any[]; nextPageToken?: string }>(u, tok);
     for (const c of data.connections ?? []) {
-      const name = c.names?.[0]?.displayName; const b = c.birthdays?.find((x: any) => x.date)?.date;
-      const anniv = c.events?.find((e: any) => e.type === 'anniversary')?.date;
-      if (!name || (!b && !anniv)) continue;
-      out.push({ name, birthday: b ? { month: b.month, day: b.day, year: b.year } : undefined, anniversary: anniv ? { month: anniv.month, day: anniv.day } : undefined, source: 'google-contacts' });
+      const name = c.names?.[0]?.displayName; const b = c.birthdays?.find((x: any) => x.date?.month)?.date;
+      if (name && b) out.push({ id: `contact_${hashId(c.resourceName ?? name)}`, name, birthday: { month: b.month, day: b.day, year: b.year }, source: 'contacts' });
     }
-    pageToken = data.nextPageToken ?? '';
-  } while (pageToken);
+    page = data.nextPageToken ?? '';
+  } while (page);
   return out;
 }
 
-export interface ClassroomAssignment { externalId: string; title: string; course: string; due: number; description?: string; link?: string }
-
-export async function fetchClassroomAssignments(tok: string): Promise<ClassroomAssignment[]> {
-  const courses = await gfetch<{ courses?: { id: string; name: string }[] }>('https://classroom.googleapis.com/v1/courses?studentId=me&courseStates=ACTIVE&pageSize=50', tok);
-  const out: ClassroomAssignment[] = [];
+export async function pullClassroom(tok: string): Promise<Task[]> {
+  const courses = await g<{ courses?: { id: string; name: string }[] }>('https://classroom.googleapis.com/v1/courses?studentId=me&courseStates=ACTIVE&pageSize=50', tok);
+  const out: Task[] = [];
   for (const c of courses.courses ?? []) {
-    const work = await gfetch<{ courseWork?: any[] }>(`https://classroom.googleapis.com/v1/courses/${c.id}/courseWork?orderBy=dueDate%20desc&pageSize=30`, tok);
+    const work = await g<{ courseWork?: any[] }>(`https://classroom.googleapis.com/v1/courses/${c.id}/courseWork?orderBy=dueDate%20desc&pageSize=30`, tok);
     for (const w of work.courseWork ?? []) {
       if (!w.dueDate) continue;
-      const { year, month, day } = w.dueDate; const h = w.dueTime?.hours ?? 23, m = w.dueTime?.minutes ?? 59;
-      const due = Date.UTC(year, month - 1, day, h, m);
-      if (due < Date.now()) continue;
-      out.push({ externalId: `classroom_${w.id}`, title: w.title, course: c.name, due, description: w.description, link: w.alternateLink });
+      const { year, month, day } = w.dueDate;
+      const due = Date.UTC(year, month - 1, day, w.dueTime?.hours ?? 23, w.dueTime?.minutes ?? 59);
+      if (due < Date.now() - 86_400_000) continue;
+      out.push({ id: `classroom_${w.id}`, externalId: w.id, title: w.title, due, tag: c.name, type: 'school', done: false, source: 'classroom', createdAt: Date.now() });
     }
+  }
+  return out;
+}
+
+export async function pullGoogleTasks(tok: string): Promise<Task[]> {
+  const lists = await g<{ items?: { id: string; title: string }[] }>('https://tasks.googleapis.com/tasks/v1/users/@me/lists', tok);
+  const out: Task[] = [];
+  for (const l of lists.items ?? []) {
+    const data = await g<{ items?: any[] }>(`https://tasks.googleapis.com/tasks/v1/lists/${l.id}/tasks?showCompleted=false&maxResults=100`, tok);
+    for (const t of data.items ?? []) if (t.title?.trim()) out.push({ id: `gtasks_${t.id}`, externalId: t.id, title: t.title, due: t.due ? Date.parse(t.due) + 17 * 3_600_000 : undefined, tag: l.title === 'My Tasks' ? undefined : l.title, type: 'personal', done: false, source: 'google-tasks', createdAt: Date.now() });
   }
   return out;
 }

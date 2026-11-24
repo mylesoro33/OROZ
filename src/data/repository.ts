@@ -3,7 +3,7 @@ import Dexie, { type Table } from 'dexie';
 // The UI only ever talks to `Repository`. Today it's IndexedDB (Dexie) on-device;
 // a SupabaseRepository can implement the same interface later without UI changes.
 
-export const TABLES = ['blocks', 'tasks', 'projects', 'routines', 'activities', 'places', 'travel', 'people', 'reminders', 'logs', 'habits', 'notes'] as const;
+export const TABLES = ['blocks', 'tasks', 'people', 'memory', 'chat'] as const;
 export type TableName = (typeof TABLES)[number];
 
 export interface Repository {
@@ -22,11 +22,11 @@ export interface Repository {
 class OrozDB extends Dexie {
   kv!: Table<{ key: string; value: unknown }, string>;
   constructor() {
-    super('oroz');
+    super('oroz-v2');
     const schema: Record<string, string> = { kv: 'key' };
     for (const t of TABLES) schema[t] = 'id';
     schema.blocks = 'id, start, taskId';
-    schema.logs = 'id, at, key';
+    schema.chat = 'id, at';
     this.version(1).stores(schema);
   }
 }
@@ -42,7 +42,7 @@ export class DexieRepository implements Repository {
   async getKV<T>(key: string) { return (await this.db.kv.get(key))?.value as T | undefined; }
   async setKV<T>(key: string, value: T) { await this.db.kv.put({ key, value }); }
   async exportAll() {
-    const out: Record<string, unknown> = { app: 'oroz', version: 1, exportedAt: new Date().toISOString() };
+    const out: Record<string, unknown> = { app: 'OROZ', version: 1, exportedAt: new Date().toISOString() };
     for (const t of TABLES) out[t] = await this.t(t).toArray();
     out.kv = await this.db.kv.toArray();
     return out;
@@ -69,7 +69,7 @@ export class MemoryRepository implements Repository {
   async bulkDelete(t: TableName, ids: string[]) { for (const id of ids) this.m(t).delete(id); }
   async getKV<T>(k: string) { return this.kv.get(k) as T | undefined; }
   async setKV<T>(k: string, v: T) { this.kv.set(k, structuredClone(v)); }
-  async exportAll() { const o: Record<string, unknown> = { app: 'oroz', version: 1 }; for (const t of TABLES) o[t] = await this.all(t); o.kv = [...this.kv].map(([key, value]) => ({ key, value })); return o; }
+  async exportAll() { const o: Record<string, unknown> = { app: 'OROZ', version: 1 }; for (const t of TABLES) o[t] = await this.all(t); o.kv = [...this.kv].map(([key, value]) => ({ key, value })); return o; }
   async importAll(d: Record<string, unknown>) { this.data.clear(); this.kv.clear(); for (const t of TABLES) if (Array.isArray(d[t])) await this.bulkPut(t, d[t] as { id: string }[]); if (Array.isArray(d.kv)) for (const { key, value } of d.kv as { key: string; value: unknown }[]) this.kv.set(key, value); }
   async wipe() { this.data.clear(); this.kv.clear(); }
 }
