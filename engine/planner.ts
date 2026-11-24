@@ -100,7 +100,7 @@ export function plan(input: PlanInput): PlanResult {
     if (tl.blocks.some(b => b.activityId === r.id && startOfDay(b.start) === d)) continue;
     const b = placeRoutine(r, d, tl, rangeStart, settings);
     if (b) push(b);
-    else if (r.flexibility !== 'optional') warnings.push(`Couldn't fit ${r.title} on ${dayName(d)}.`);
+    else if (r.flexibility !== 'optional' && at(d, r.start) >= rangeStart) warnings.push(`Couldn't fit ${r.title} on ${dayName(d)}.`);
   }
 
   // 4c. Gap snacks go in after holds and routines so they work around them.

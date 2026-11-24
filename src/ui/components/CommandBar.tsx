@@ -116,7 +116,7 @@ export function CommandBar() {
         {panel.type === 'food' && <FoodList minutes={panel.minutes} items={panel.items} onDone={() => { setPanel(null); setText(''); }} />}
         {panel.type === 'plan' && <PlanSummary {...panel} />}
         {panel.type === 'slot' && <div className="flex items-center justify-between gap-2"><span className="text-sm">Next block long enough for a movie</span>
-          <Btn kind="primary" onClick={() => { A.createBlock({ title: 'Movie', kind: 'hobby', start: panel.start, end: panel.start + panel.minutes * MIN, activityId: panel.activityId, flexibility: 'optional', reason: 'Next evening slot long enough for a movie' }); toast('Movie scheduled', { label: 'Undo', run: () => store().undo() }); setPanel(null); setText(''); }}>Schedule</Btn></div>}
+          <Btn kind="primary" onClick={() => { const mv = A.createBlock({ title: 'Movie', kind: 'hobby', start: panel.start, end: panel.start + panel.minutes * MIN, activityId: panel.activityId, flexibility: 'fixed', reason: 'Next evening long enough for a movie — flexible work moved around it' }); A.reflowAround(mv.id); toast('Movie scheduled', { label: 'Undo', run: () => store().undo() }); setPanel(null); setText(''); }}>Schedule</Btn></div>}
       </div>}
       <form onSubmit={e => { e.preventDefault(); if (panel?.type === 'capture' && panel.c.raw === text.trim()) confirm(panel.c); else run(text); }}
         className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-white/10 dark:bg-[#1b1b27]">

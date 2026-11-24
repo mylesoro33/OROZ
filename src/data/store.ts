@@ -103,9 +103,12 @@ export const store = () => { if (!_store) throw new Error('store not ready'); re
 export function useApp<T>(select: (s: AppData) => T): T {
   const s = store();
   const last = useRef<{ state: AppData; value: T } | null>(null);
+  // Selectors may close over props: a new selector invalidates the cache (once per render).
+  const sel = useRef(select);
+  if (sel.current !== select) { sel.current = select; last.current = null; }
   return useSyncExternalStore(s.subscribe, () => {
     if (last.current && last.current.state === s.state) return last.current.value;
-    const value = select(s.state);
+    const value = sel.current(s.state);
     last.current = { state: s.state, value };
     return value;
   });

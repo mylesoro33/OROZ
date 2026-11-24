@@ -166,9 +166,10 @@ export function neverSuggest(sg: Suggestion) {
 }
 
 /** Next free slot of `minutes` in waking hours from `from`, looking ahead `days`. */
-export function nextSlot(minutes: number, from: number, opts: { days?: number; earliestMin?: number; latestMin?: number } = {}): number | undefined {
+export function nextSlot(minutes: number, from: number, opts: { days?: number; earliestMin?: number; latestMin?: number; canBump?: boolean } = {}): number | undefined {
   const s = S();
-  const tl = new Timeline(s.blocks.filter(b => b.status !== 'skipped'));
+  // canBump: flexible planner work may be pushed aside (life stuff wins over productivity)
+  const tl = new Timeline(s.blocks.filter(b => b.status !== 'skipped' && !(opts.canBump && b.source === 'planner' && b.flexibility !== 'fixed' && !!b.taskId)));
   for (let d = 0; d < (opts.days ?? 3); d++) {
     const day = addDays(startOfDay(from), d);
     const lo = Math.max(from, at(day, opts.earliestMin ?? (minutesOfDay(at(day, s.settings.wake)) + 30)));
@@ -196,7 +197,7 @@ export function movieSlot() {
   const s = S();
   const movie = s.activities.find(a => a.category === 'movie');
   const len = movie?.durationMin ?? 120;
-  return nextSlot(len, now(), { days: 4, earliestMin: 17 * 60, latestMin: Math.min(23 * 60 + 30, minutesOfDay(at(now(), s.settings.bedtime)) || 1439) });
+  return nextSlot(len, now(), { days: 4, canBump: true, earliestMin: 17 * 60, latestMin: Math.min(23 * 60 + 30, minutesOfDay(at(now(), s.settings.bedtime)) || 1439) });
 }
 
 // ---------------------------------------------------------------------------
@@ -343,9 +344,11 @@ export function scheduleIdle(fn: () => void) {
 }
 
 /** Create staged prep tasks (brainstorm → order → wrap → reserve) for occasions entering their lead window. */
+/** Gift holidays prep automatically; others (Thanksgiving, Halloween…) are one tap away in People. */
+const AUTO_PREP_HOLIDAYS = new Set(['Christmas', "Mother's Day", "Father's Day"]);
 export function syncOccasions() {
   const st = S(); const t = now();
-  const occ = [...personOccasions(st.people, t), ...holidays(t).filter(h => h.major)];
+  const occ = [...personOccasions(st.people, t), ...holidays(t).filter(h => AUTO_PREP_HOLIDAYS.has(h.title))];
   const have = new Set(st.tasks.map(x => x.id));
   const add: Task[] = [];
   for (const o of occ) {
